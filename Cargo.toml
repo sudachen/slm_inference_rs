@@ -6,10 +6,10 @@ members = [
     "crates/slm_camelid",
     "crates/slm_ikllama",
     "crates/slm_ikllama_sys",
-    "slm_inference",
     "crates/slm_mistral",
     "crates/slm_llama",
-    "examples/lore_extractor"
+    "examples/lore_extractor",
+    "slm_inference",
 ]
 
 [workspace.package]
