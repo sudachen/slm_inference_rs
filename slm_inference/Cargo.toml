@@ -2,6 +2,8 @@
 name = "slm_inference"
 version = "0.1.0"
 
+description = "Backend-agnostic trait layer for running Small Language Model (SLM) inference in Rust."
+
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
