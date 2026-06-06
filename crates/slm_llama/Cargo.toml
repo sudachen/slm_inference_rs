@@ -1,7 +1,16 @@
 [package]
 name = "slm_llama"
 version = "0.1.0"
-edition = "2024"
+
+description = "llama.cpp backend for slm_inference"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
 
 [lib]
 name = "slm_llama"
