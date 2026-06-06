@@ -1,0 +1,6 @@
+{
+  global:
+    *slm_llama*; # allow slm_llama calls
+  local:
+    *;           # hide all internall names
+};

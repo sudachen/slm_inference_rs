@@ -1,0 +1,23 @@
+[package]
+name = "slm_llama"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "slm_llama"
+crate-type = ["dylib"]
+
+[dependencies]
+llama-cpp-sys-2 = "0.1.146"
+slm_inference = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+# По умолчанию можно оставить чистый CPU без дополнительных либdefault = []
+cuda = ["llama-cpp-sys-2/cuda"]
+vulkan = ["llama-cpp-sys-2/vulkan"]
+metal = ["llama-cpp-sys-2/metal"]
+
+
+
+
