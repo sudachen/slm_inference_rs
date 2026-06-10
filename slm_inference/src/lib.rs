@@ -1,17 +1,61 @@
 pub mod hf;
-pub use hf::HfModelInfo;
+pub use hf::SlmHfModel;
 pub mod core;
 pub mod errors;
 pub mod inference;
+mod chat;
+mod answer;
+mod forkable;
+mod formatter;
+pub mod models;
 
 use std::path::Path;
 use std::result::Result;
 
-pub use crate::errors::*;
-pub use crate::inference::SlmInference;
+use errors::*;
+pub use inference::{SlmInference, SlmSimpleInference};
+pub use forkable::{SlmForkableInference, SlmParallelInference};
+pub use chat::{SlmChat, SlmSimpleChat};
+pub use answer::{SlmAnswer, SlmBrake, SlmBrakeFilter};
+pub use formatter::SlmFormatter;
+pub use models::SlmDynamicFormatter;
 
 pub trait SlmToken: Copy {
     fn as_i32(&self) -> i32;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlmRole {
+    System,
+    User,
+    Assistant,
+    Tool(String),
+}
+
+impl SlmRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SlmRole::System => "system",
+            SlmRole::User => "user",
+            SlmRole::Assistant => "assistant",
+            SlmRole::Tool(_) => "tool",
+        }
+    }
+
+    pub fn is_tool(&self) -> bool {
+        matches!(self, SlmRole::Tool(_))
+    }
+
+    pub fn tool_name(&self) -> Option<&str> {
+        match self {
+            SlmRole::Tool(name) => Some(name.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn tool(name: &str) -> SlmRole {
+        SlmRole::Tool(name.to_string())
+    }
 }
 
 pub trait SlmBatch<T: SlmToken> {
@@ -24,6 +68,7 @@ pub trait SlmBatch<T: SlmToken> {
     ) -> Result<(), BatchError>;
     fn clear(&mut self);
     fn n_tokens(&self) -> usize;
+    fn n_max(&self) -> usize;
 }
 
 pub trait SlmModelConfig {
@@ -45,6 +90,7 @@ pub trait SlmContextBuilder<T> {
 pub trait SlmContext {
     type Token: SlmToken;
     type Batch: SlmBatch<Self::Token>;
+    type Snapshot;
     fn new_batch(&self, tokens: usize, sequences: usize) -> Result<Self::Batch, BatchError>;
     fn max_batch_len(&self) -> usize;
     fn decode(&mut self, batch: &mut Self::Batch) -> Result<(), DecodeError>;
@@ -62,4 +108,14 @@ pub trait SlmContext {
         add_special: bool,
         parse_special: bool,
     ) -> Result<Vec<Self::Token>, StringToTokenError>;
+    fn save(&mut self, n_pos: usize, seq_id: Option<i32>) -> Result<Self::Snapshot, ContextError>;
+    fn rollback(&mut self, snapshot: &Self::Snapshot) -> Result<usize, ContextError>;
+    fn clear(&mut self) -> Result<usize, ContextError>;
+    fn format(&self, parts: &[(SlmRole, &str)], ask: bool) -> Result<String, ContextError>;
 }
+
+pub trait SlmRollback {
+    fn save(&mut self) -> Result<(),InferenceError>;
+    fn rollback(&mut self) -> Result<(),InferenceError>;
+}
+

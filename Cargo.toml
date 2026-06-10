@@ -1,14 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/slm_bitnet",
-    "crates/slm_bitnet_sys",
-    "crates/slm_camelid",
-    "crates/slm_ikllama",
-    "crates/slm_ikllama_sys",
-    "crates/slm_mistral",
-    "crates/slm_llama",
-    "examples/lore_extractor",
+    "crates/*",
+    "examples/*",
     "slm_inference",
 ]
 
@@ -45,7 +39,8 @@ bindgen = "0.72.1"
 cmake = "0.1.58"
 glob = "0.3.3"
 walkdir = "2.5.0"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 find_cuda_helper = "0.2.0"
 cc = "1.2.62"
 thiserror = "2.0.18"
-
+enum_dispatch = "0.3"

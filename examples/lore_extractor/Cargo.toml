@@ -1,0 +1,16 @@
+[package]
+name = "lore_extractor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = {workspace = true}
+anyhow = {workspace = true}
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+epubscan = {path="../../crates/epubscan", version = "^0.1.0"}
+slm_inference = {path = "../../slm_inference", version="^0.1.0"}
+slm_llama = {path = "../../crates/slm_llama", version="^0.1.0", features=["vulkan"]}
+itertools = "0.14.0"
+serde = {workspace = true}
+serde_json = {workspace = true}

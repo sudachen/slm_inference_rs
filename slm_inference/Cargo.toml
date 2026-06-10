@@ -17,3 +17,6 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 hf-hub = { workspace = true }
+enum_dispatch = { workspace = true }
+
+

@@ -4,12 +4,13 @@ use hf_hub::api::sync::ApiBuilder;
 use std::path::PathBuf;
 use tracing::debug;
 
-pub struct HfModelInfo {
+pub struct SlmHfModel {
     pub repo: &'static str,
     pub filename: &'static str,
+    pub formatter: &'static str,
 }
 
-impl HfModelInfo {
+impl SlmHfModel {
     pub fn get_or_download(&self) -> anyhow::Result<PathBuf> {
         get_or_download_model(self.repo, self.filename)
     }

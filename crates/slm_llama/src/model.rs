@@ -8,6 +8,7 @@ use std::path::Path;
 #[derive(Clone)]
 struct LlamaModelFree;
 impl Free<llama_cpp_sys_2::llama_model> for LlamaModelFree {
+    #[inline(never)]
     unsafe fn free(ptr: *mut llama_cpp_sys_2::llama_model) {
         unsafe { llama_cpp_sys_2::llama_free_model(ptr) };
     }
@@ -65,6 +66,7 @@ impl Debug for ModelConfig {
 }
 
 impl Default for ModelConfig {
+    #[inline(never)]
     fn default() -> Self {
         Self {
             params: unsafe { llama_cpp_sys_2::llama_model_default_params() },
@@ -132,13 +134,21 @@ impl slm_inference::SlmModelConfig for ModelConfig {
         super::backend::init();
         let path_ref = path.as_ref();
         let path = path_ref.to_str().ok_or(GgufLoaderError::InvalidPath)?;
+        let model = self.load_llama_model(path)?;
+        Ok(Model(ModelPtr::new(model)))
+    }
+}
+
+impl ModelConfig {
+    #[inline(never)]
+    pub fn load_llama_model(&self, path: &str) -> Result<*mut llama_cpp_sys_2::llama_model,GgufLoaderError> {
         let cstr = CString::new(path)
-            .map_err(|_| FfiError::GeneralError("path string allocation".to_string()))?;
+            .map_err(|_| FfiError::Error("path string allocation".to_string()))?;
         let llama_model =
             unsafe { llama_cpp_sys_2::llama_model_load_from_file(cstr.as_ptr(), self.params) };
         if llama_model.is_null() {
             return Err(GgufLoaderError::BadModel);
         }
-        Ok(Model(ModelPtr::new(llama_model)))
+        Ok(llama_model)
     }
 }

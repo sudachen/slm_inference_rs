@@ -7,6 +7,7 @@ static LLAMA_BACKEND_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 pub struct Backend;
 
+#[inline(never)]
 pub fn init() -> Backend {
     if LLAMA_BACKEND_INITIALIZED
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -20,6 +21,8 @@ pub fn init() -> Backend {
     Backend {}
 }
 
+
+#[inline(never)]
 unsafe extern "C" fn llama_log_callback(
     level: c_uint,
     text: *const c_char,

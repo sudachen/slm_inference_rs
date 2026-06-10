@@ -1,0 +1,20 @@
+[package]
+name = "fb2scan"
+
+version = "0.1.0"
+
+description = "FB2 scanner for slm_inference tests and examples"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+
+[dependencies]
+quick-xml = { workspace = true }
+fb2 =  { workspace = true }
+anyhow = { workspace = true }
+whatlang = { workspace = true }

@@ -1,17 +1,17 @@
 use std::ffi::CString;
 use std::os::raw::c_int;
-
-use super::model::Model;
+use tracing::warn;
+use crate::model::Model;
 use crate::batch::{Batch, Token};
 
 use slm_inference::core::shared_ptr::{Free, SharedPtr};
-use slm_inference::errors::{BatchError, DecodeError, TokenToStringError};
-use slm_inference::{ContextBuilderError, FfiError, SamplingError, SlmToken, StringToTokenError};
+use slm_inference::errors::{BatchError, DecodeError, TokenToStringError, ContextBuilderError, StringToTokenError, FfiError, SamplingError, ContextError};
+use slm_inference::{SlmRole, SlmToken};
 
 #[derive(Clone)]
 struct LlamaSamplerFree;
 impl Free<llama_cpp_sys_2::llama_sampler> for LlamaSamplerFree {
-    #[inline]
+    #[inline(never)]
     unsafe fn free(ptr: *mut llama_cpp_sys_2::llama_sampler) {
         unsafe { llama_cpp_sys_2::llama_sampler_free(ptr) };
     }
@@ -20,7 +20,7 @@ impl Free<llama_cpp_sys_2::llama_sampler> for LlamaSamplerFree {
 #[derive(Clone)]
 struct LlamaContextFree;
 impl Free<llama_cpp_sys_2::llama_context> for LlamaContextFree {
-    #[inline]
+    #[inline(never)]
     unsafe fn free(ptr: *mut llama_cpp_sys_2::llama_context) {
         unsafe { llama_cpp_sys_2::llama_free(ptr) };
     }
@@ -36,11 +36,13 @@ pub struct Context {
     ctx: SharedPtr<llama_cpp_sys_2::llama_context, LlamaContextFree>,
     #[allow(dead_code)]
     model: Model,
+    template: Vec<u8>
 }
 
 impl slm_inference::SlmContext for Context {
     type Token = Token;
     type Batch = Batch;
+    type Snapshot = (usize,Option<i32>);
 
     fn new_batch(&self, tokens: usize, sequences: usize) -> Result<Batch, BatchError> {
         Batch::new(tokens, sequences)
@@ -50,6 +52,7 @@ impl slm_inference::SlmContext for Context {
         self.n_batch as usize
     }
 
+    #[inline(never)]
     fn decode(&mut self, batch: &mut Batch) -> Result<(), DecodeError> {
         let result =
             unsafe { llama_cpp_sys_2::llama_decode(self.ctx.get_ptr(), batch.llama_batch) };
@@ -61,6 +64,7 @@ impl slm_inference::SlmContext for Context {
         Ok(())
     }
 
+    #[inline(never)]
     fn sample(&mut self, logit_idx: usize) -> Result<Option<Self::Token>, SamplingError> {
         let token = unsafe {
             llama_cpp_sys_2::llama_sampler_sample(
@@ -69,12 +73,16 @@ impl slm_inference::SlmContext for Context {
                 logit_idx as i32,
             )
         };
-        match unsafe { llama_cpp_sys_2::llama_vocab_is_eog(self.vocab_ptr, token) } {
-            false => Ok(Some(token.into())),
-            _ => Ok(None),
+        print!(" {} ", token);
+        //let is_control = unsafe { llama_cpp_sys_2::llama_vocab_is_control(self.vocab_ptr, token) };
+        let is_eog = unsafe { llama_cpp_sys_2::llama_vocab_is_eog(self.vocab_ptr, token) };
+        if is_eog {
+            return Ok(None);
         }
+        Ok(Some(token.into()))
     }
 
+    #[inline(never)]
     fn token_to_bytes(
         &self,
         token: Self::Token,
@@ -113,6 +121,7 @@ impl slm_inference::SlmContext for Context {
         }
     }
 
+    #[inline(never)]
     fn str_to_tokens(
         &self,
         str: &str,
@@ -169,6 +178,99 @@ impl slm_inference::SlmContext for Context {
         unsafe { buffer.set_len(size) }
         Ok(buffer)
     }
+
+    fn save(&mut self, n_pos: usize, seq_id: Option<i32>) -> Result<Self::Snapshot, ContextError> {
+        println!("SAVE {n_pos}, {seq_id:?}");
+        Ok((n_pos, seq_id))
+    }
+
+    #[inline(never)]
+    fn rollback(&mut self, snapshot: &Self::Snapshot) -> Result<usize, ContextError> {
+        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
+        if memory.is_null() {
+            return Err(FfiError::NullPtr.into());
+        }
+        let (n_pos, seq_id) = *snapshot;
+        println!("ROLLBACK {n_pos}, {seq_id:?}");
+
+        unsafe { llama_cpp_sys_2::llama_memory_seq_rm(memory, seq_id.unwrap_or(-1), n_pos as i32, -1) };
+        Ok(n_pos)
+    }
+
+    fn clear(&mut self) -> Result<usize, ContextError> {
+        todo!()
+    }
+
+    fn format(&self, parts: &[(SlmRole, &str)], ask: bool) -> Result<String, ContextError> {
+
+        //println!("FORMAT {}", String::from_utf8_lossy(self.template.as_slice()));
+
+        println!("{:#?} -> {}",parts.iter().map(|(role, content)| (role.as_str(), content)).collect::<Vec<_>>(),ask);
+
+        let tmpl_ptr = self.template.as_ptr() as *const std::os::raw::c_char;
+        let cs = parts
+            .iter()
+            .map(|(role, content)| {
+                Ok((
+                    CString::new(role.as_str()).map_err(|_| ContextError::Error("Invalid role".to_string()))?,
+                    CString::new(*content).map_err(|_| ContextError::Error("Invalid content".to_string()))?
+                ))
+            })
+            .collect::<Result<Vec<_>,ContextError>>()?;
+
+        let chat_messages: Vec<llama_cpp_sys_2::llama_chat_message> = cs
+            .iter()
+            .map(|(role, content)| {
+                llama_cpp_sys_2::llama_chat_message {
+                    role: role.as_ptr(),
+                    content: content.as_ptr(),
+                }
+            })
+            .collect();
+
+        println!("CHAT {:#?}", chat_messages.as_slice());
+
+        unsafe {
+            let alloc_size = llama_cpp_sys_2::llama_chat_apply_template(
+                tmpl_ptr,
+                chat_messages.as_ptr(),
+                chat_messages.len(),
+                ask,
+                std::ptr::null_mut(),
+                0,
+            );
+
+            println!("alloc_size: {alloc_size}");
+
+            if alloc_size < 0 {
+                return Err(ContextError::Error("Failed to apply template".to_string()));
+            }
+
+            let mut buffer: Vec<u8> = vec![0; (alloc_size as usize) + 1];
+            let alloc_size = llama_cpp_sys_2::llama_chat_apply_template(
+                tmpl_ptr,
+                chat_messages.as_ptr(),
+                chat_messages.len(),
+                ask,
+                buffer.as_mut_ptr() as *mut std::os::raw::c_char,
+                buffer.len() as i32,
+            );
+
+            if alloc_size < 0 {
+                return Err(ContextError::Error("Failed to apply template".to_string()));
+            }
+
+            let c_str = std::ffi::CStr::from_bytes_with_nul(&buffer[..=(alloc_size as usize)])
+                .map_err(|e| FfiError::CstAllocationError)?;
+
+            let rust_string = c_str
+                .to_str()
+                .map_err(|e| ContextError::Error(format!("Ошибка UTF-8: {}", e)))?
+                .to_string();
+
+            Ok(rust_string)
+        }
+    }
 }
 
 pub struct Builder {
@@ -190,6 +292,7 @@ pub enum KVType {
 }
 
 impl Builder {
+    #[inline(never)]
     pub fn new(model: Model) -> Self {
         Self {
             model,
@@ -228,6 +331,7 @@ impl Builder {
 }
 
 impl slm_inference::SlmContextBuilder<Context> for Builder {
+    #[inline(never)]
     fn build(mut self) -> Result<Context, ContextBuilderError> {
         let ctx =
             unsafe { llama_cpp_sys_2::llama_init_from_model(self.model.get_ptr()?, self.params) };
@@ -260,12 +364,42 @@ impl slm_inference::SlmContextBuilder<Context> for Builder {
             SharedPtr::new(sampler)
         };
 
+        let template = unsafe {
+            let key = CString::new("tokenizer.chat_template").map_err(|_| FfiError::Error("Invalid key string".to_string()))?;
+
+            let template_len = llama_cpp_sys_2::llama_model_meta_val_str(
+                self.model.get_const_ptr()?,
+                key.as_ptr(),
+                std::ptr::null_mut(),
+                0,
+            );
+
+            if template_len > 0 {
+                let mut template_buf = vec![0u8; (template_len as usize) + 1];
+                let res = llama_cpp_sys_2::llama_model_meta_val_str(
+                    self.model.get_const_ptr()?,
+                    key.as_ptr(),
+                    template_buf.as_mut_ptr() as *mut std::os::raw::c_char,
+                    template_buf.len(),
+                );
+                if res < 0 {
+                    Err(FfiError::Error("Failed to read key 'tokenizer.chat_template' from model metadata".to_string()))?
+                } else {
+                    template_buf
+                }
+            } else {
+                warn!("Failed to find key 'tokenizer.chat_template' in model metadata");
+                vec![0u8;0]
+            }
+        };
+
         Ok(Context {
             ctx: SharedPtr::new(ctx),
             vocab_ptr,
             n_batch: self.params.n_batch,
             model: self.model,
             sampler,
+            template,
         })
     }
 

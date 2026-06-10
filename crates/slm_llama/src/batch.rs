@@ -19,11 +19,11 @@ impl From<i32> for Token {
 #[derive(Debug)]
 pub struct Batch {
     pub allocated: usize,
-    pub initialized_logits: Vec<llama_cpp_sys_2::llama_token>,
     pub llama_batch: llama_cpp_sys_2::llama_batch,
 }
 
 impl Batch {
+    #[inline(never)]
     pub fn new(n_tokens: usize, n_seq_max: usize) -> Result<Self, BatchError> {
         let n_tokens_i32 =
             i32::try_from(n_tokens).map_err(|_| BatchError::NtokTooLarge(n_tokens))?;
@@ -33,13 +33,12 @@ impl Batch {
 
         Ok(Batch {
             allocated: n_tokens,
-            initialized_logits: vec![],
             llama_batch: batch,
         })
     }
 }
-
 impl slm_inference::SlmBatch<Token> for Batch {
+    #[inline(never)]
     fn add(
         &mut self,
         token: Token,
@@ -78,26 +77,25 @@ impl slm_inference::SlmBatch<Token> for Batch {
                 .write(i8::from(logits));
         }
 
-        if logits {
-            self.initialized_logits.push(offset);
-        } else {
-            self.initialized_logits.retain(|l| l != &offset);
-        }
         self.llama_batch.n_tokens += 1;
         Ok(())
     }
 
     fn clear(&mut self) {
         self.llama_batch.n_tokens = 0;
-        self.initialized_logits.clear();
     }
 
     fn n_tokens(&self) -> usize {
         self.llama_batch.n_tokens as usize
     }
+
+    fn n_max(&self) -> usize {
+        self.allocated
+    }
 }
 
 impl<'a> Drop for Batch {
+    #[inline(never)]
     fn drop(&mut self) {
         unsafe {
             if self.allocated > 0 {

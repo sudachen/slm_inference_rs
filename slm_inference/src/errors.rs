@@ -46,8 +46,8 @@ pub enum StringToTokenError {
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum InferenceError {
-    #[error("General Error {0}")]
-    GeneralError(String),
+    #[error("Error {0}")]
+    Error(String),
     #[error("Batch Error {0}")]
     BatchError(#[from] BatchError),
     #[error("Ffi Error {0}")]
@@ -60,6 +60,10 @@ pub enum InferenceError {
     DecodeError(#[from] DecodeError),
     #[error("SamplingError {0}")]
     SamplingError(#[from] SamplingError),
+    #[error("SnapshotError {0}")]
+    ContextError(#[from] ContextError),
+    #[error("Invalid Role")]
+    InvalidRole,
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -92,12 +96,30 @@ pub enum FfiError {
     CstAllocationError,
     #[error("C_int Conversion Error")]
     CintConversionError,
-    #[error("General Error {0}")]
-    GeneralError(String),
+    #[error("Error {0}")]
+    Error(String),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ContextBuilderError {
     #[error("Ffi Error {0}")]
     FfiError(#[from] FfiError),
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum ContextError {
+    #[error("Error {0}")]
+    Error(String),
+    #[error("Ffi Error {0}")]
+    FfiError(#[from] FfiError),
+    #[error("SnapshotNotFound")]
+    SnapshotNotFound,
+    #[error("SnapshotsNotSupported")]
+    SnapshotsNotSupported,
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum ModelFormatterError {
+    #[error("Unknown model formatter {0}")]
+    UnknownModelFormatter(String),
 }
