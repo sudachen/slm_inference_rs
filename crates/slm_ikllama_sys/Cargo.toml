@@ -37,6 +37,10 @@ include = [
     "ik_llama.cpp/convert_hf_to_gguf.py"
 ]
 
+exclude = [
+    "ik_llama.cpp/common/build-info.cpp"
+]
+
 [dependencies]
 
 
