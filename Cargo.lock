@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "epubscan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "quick-xml 0.39.4",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "fb2scan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "fb2",
@@ -1193,7 +1193,7 @@ checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
 
 [[package]]
 name = "lore_extractor"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1825,7 +1825,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slm_ikllama"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "slm_ikllama_sys",
  "slm_inference",
@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "slm_ikllama_sys"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bindgen",
  "cc",
@@ -1846,7 +1846,7 @@ dependencies = [
 
 [[package]]
 name = "slm_inference"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "slm_llama"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "llama-cpp-sys-2",
  "slm_inference",

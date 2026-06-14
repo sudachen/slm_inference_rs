@@ -1,6 +1,6 @@
 [package]
 name = "slm_llama"
-version = "0.1.0"
+version = "0.1.1"
 
 description = "llama.cpp backend for slm_inference"
 
@@ -18,7 +18,7 @@ crate-type = ["dylib"]
 
 [dependencies]
 llama-cpp-sys-2 = "0.1.146"
-slm_inference = { path = "../../slm_inference", version = "^0.1.0" }
+slm_inference = { path = "../../slm_inference", version = "^0.1.1" }
 tracing = { workspace = true }
 
 [features]
