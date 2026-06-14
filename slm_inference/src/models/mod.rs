@@ -1,18 +1,18 @@
 mod gemma4;
 mod llama3;
 mod mistal;
-mod qwen25;
 mod phi4;
+mod qwen25;
 
-pub use gemma4::{GemmaFormatter, Gemma4Flavor};
+pub use gemma4::{Gemma4Flavor, GemmaFormatter};
 pub use llama3::Llama3Formatter;
-pub use mistal::{MistralFormatter, MistralFlavor};
-pub use qwen25::Qwen25Formatter;
+pub use mistal::{MistralFlavor, MistralFormatter};
 pub use phi4::Phi4Formatter;
+pub use qwen25::Qwen25Formatter;
 
+use crate::errors::ModelFormatterError;
 use crate::formatter::SlmToolStyle;
 use crate::{SlmFormatter, SlmRole};
-use crate::errors::ModelFormatterError;
 
 pub enum SlmDynamicFormatter {
     Gemma(GemmaFormatter),
@@ -28,14 +28,31 @@ impl TryFrom<&str> for SlmDynamicFormatter {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
             "llama3" => Ok(Self::Llama3(Llama3Formatter)),
-            "gemma4" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::Vanilla,true))),
-            "gemma4-google" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::GoogleOfficial,true))),
-            "gemma4-unsloth" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::UnslothFixed,true))),
-            "mistral" => Ok(Self::Mistral(MistralFormatter::new(MistralFlavor::V3Tekken,true))),
-            "mistral-legacy" => Ok(Self::Mistral(MistralFormatter::new(MistralFlavor::Legacy,true))),
+            "gemma4" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::Vanilla,
+                true,
+            ))),
+            "gemma4-google" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::GoogleOfficial,
+                true,
+            ))),
+            "gemma4-unsloth" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::UnslothFixed,
+                true,
+            ))),
+            "mistral" => Ok(Self::Mistral(MistralFormatter::new(
+                MistralFlavor::V3Tekken,
+                true,
+            ))),
+            "mistral-legacy" => Ok(Self::Mistral(MistralFormatter::new(
+                MistralFlavor::Legacy,
+                true,
+            ))),
             "qwen25" => Ok(Self::Qwen25(Qwen25Formatter::new(true))),
             "phi4" => Ok(Self::Phi4(Phi4Formatter::new(true))),
-            _ => Err(ModelFormatterError::UnknownModelFormatter(value.to_string())),
+            _ => Err(ModelFormatterError::UnknownModelFormatter(
+                value.to_string(),
+            )),
         }
     }
 }
@@ -86,7 +103,8 @@ impl SlmFormatter for SlmDynamicFormatter {
     }
 
     fn format_tool_response(&self, tool_name: &str, response_content: &str) -> String {
-        self.deref().format_tool_response(tool_name, response_content)
+        self.deref()
+            .format_tool_response(tool_name, response_content)
     }
 
     fn clean(&self, text: &str) -> String {

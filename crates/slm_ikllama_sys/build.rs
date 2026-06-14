@@ -2,7 +2,6 @@
 // slightly modified llama-cpp-sys-2 build script
 //
 
-
 use cmake::Config;
 use glob::glob;
 use std::env;
@@ -76,7 +75,7 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool, target_os: &Target
                 "*.a"
             }
         }
-        TargetOs::Linux  => {
+        TargetOs::Linux => {
             if build_shared_libs {
                 "*.so"
             } else {
@@ -169,13 +168,12 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
 
-
     debug_log!("TARGET: {}", target_triple);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
     debug_log!("TARGET_DIR: {}", target_dir.display());
     debug_log!("OUT_DIR: {}", out_dir.display());
     debug_log!("BUILD_SHARED: {}", build_shared_libs);
-    
+
     // Make sure that changes to the llama.cpp project trigger a rebuild.
     let rebuild_on_children_of = [
         llama_src.join("src"),
@@ -193,22 +191,24 @@ fn main() {
             .map(|f| f.starts_with("CMake"))
             .unwrap_or_default()
             || rebuild_on_children_of
-            .iter()
-            .any(|src_folder| entry.path().starts_with(src_folder));
+                .iter()
+                .any(|src_folder| entry.path().starts_with(src_folder));
         if rebuild {
             println!("cargo:rerun-if-changed={}", entry.path().display());
         }
     }
 
     // Speed up build
-    unsafe {env::set_var(
-        "CMAKE_BUILD_PARALLEL_LEVEL",
-        std::thread::available_parallelism()
-            .unwrap()
-            .get()
-            .min(8)
-            .to_string(),
-    );}
+    unsafe {
+        env::set_var(
+            "CMAKE_BUILD_PARALLEL_LEVEL",
+            std::thread::available_parallelism()
+                .unwrap()
+                .get()
+                .min(8)
+                .to_string(),
+        );
+    }
 
     // Bindings
     let mut bindings_builder = bindgen::Builder::default()
@@ -331,9 +331,9 @@ fn main() {
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
         if cfg!(feature = "native") {
-             config.define("CMAKE_CUDA_ARCHITECTURES","native");
+            config.define("CMAKE_CUDA_ARCHITECTURES", "native");
         } else {
-            config.define("CMAKE_CUDA_ARCHITECTURES","86;89;120");
+            config.define("CMAKE_CUDA_ARCHITECTURES", "86;89;120");
         }
 
         // Re-run build script if CUDA_PATH environment variable changes
@@ -350,7 +350,7 @@ fn main() {
     }
 
     if cfg!(feature = "native") {
-        config.define("GGML_SSE42", "NATIVE");
+        config.define("GGML_NATIVE", "ON");
     } else {
         config.define("GGML_AVX2", "ON");
         config.define("GGML_AVX512_BF16", "ON");
@@ -359,7 +359,7 @@ fn main() {
         config.define("GGML_AVX_VNNI", "ON");
         config.define("GGML_SSE42", "ON");
     }
-    config.define("BUILD_SHARED_LIBS","ON");
+    config.define("BUILD_SHARED_LIBS", "ON");
     //config.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
 
     if matches!(target_os, TargetOs::Apple(_)) {
@@ -385,9 +385,7 @@ fn main() {
 
     config.static_crt(static_crt);
 
-    if matches!(target_os, TargetOs::Linux)
-        && target_triple.contains("aarch64")
-    {
+    if matches!(target_os, TargetOs::Linux) && target_triple.contains("aarch64") {
         // If the target-cpu is not specified as native, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
         config.define("GGML_NATIVE", "OFF");
@@ -413,12 +411,7 @@ fn main() {
     println!("cargo:rustc-link-search={}", build_dir.display());
 
     // Link libraries
-    let llama_libs_kind = if build_shared_libs
-    {
-        "dylib"
-    } else {
-        "static"
-    };
+    let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
     let llama_libs = extract_lib_names(&out_dir, build_shared_libs, &target_os);
 
     assert_ne!(llama_libs.len(), 0);
@@ -544,5 +537,3 @@ fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
 
     files
 }
-
-

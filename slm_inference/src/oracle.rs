@@ -1,8 +1,7 @@
 use crate::errors::InferenceError;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::{
-    SlmAnswer, SlmBrake, SlmContext, SlmInference, SlmRole,
-    SlmSimpleInference, SlmBoxedBrakeFn
+    SlmAnswer, SlmBoxedBrakeFn, SlmBrake, SlmContext, SlmInference, SlmRole, SlmSimpleInference,
 };
 
 const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
@@ -179,7 +178,9 @@ impl<I: SlmInference, F: SlmFormatter> SlmSimpleOracle<I, F> {
                 }
             }
             SlmToolStyle::SeparateTurn => {
-                if let Some(active_role) = &self.active_turn && active_role != role {
+                if let Some(active_role) = &self.active_turn
+                    && active_role != role
+                {
                     fragment.push_str(&self.formatter.turn_end(&active_role));
                     fragment.push_str(&self.formatter.turn_start(&active_role));
                 }
@@ -234,7 +235,8 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
             .inference
             .generate_until(&mut [brake, Some(SlmBrake::token_limit(self.max_answer_tokens))])?;
         if think {
-            answer = answer.map(|s| self.formatter.reasoning_trigger().unwrap_or("").to_string() + &s);
+            answer =
+                answer.map(|s| self.formatter.reasoning_trigger().unwrap_or("").to_string() + &s);
         }
         Ok(answer.split_thought(&self.formatter))
     }

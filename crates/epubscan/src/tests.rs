@@ -113,7 +113,8 @@ fn make_epub(chapters: &[(&str, &str, &str)]) -> Vec<u8> {
     let buf = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(buf);
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let deflated =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     zip.start_file("mimetype", stored).unwrap();
     zip.write_all(b"application/epub+zip").unwrap();
@@ -130,7 +131,12 @@ fn make_epub(chapters: &[(&str, &str, &str)]) -> Vec<u8> {
     let manifest_items: String = chapters
         .iter()
         .enumerate()
-        .map(|(_i, (id, _, _))| format!(r#"<item id="{id}" href="Text/{id}.xhtml" media-type="application/xhtml+xml"/>"#, id = id))
+        .map(|(_i, (id, _, _))| {
+            format!(
+                r#"<item id="{id}" href="Text/{id}.xhtml" media-type="application/xhtml+xml"/>"#,
+                id = id
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n    ");
     let spine_items: String = chapters
@@ -147,7 +153,10 @@ fn make_epub(chapters: &[(&str, &str, &str)]) -> Vec<u8> {
       <navLabel><text>{title}</text></navLabel>
       <content src="Text/{id}.xhtml"/>
     </navPoint>"#,
-                i = i, po = i + 1, title = title, id = id
+                i = i,
+                po = i + 1,
+                title = title,
+                id = id
             )
         })
         .collect::<Vec<_>>()
@@ -189,9 +198,11 @@ fn make_epub(chapters: &[(&str, &str, &str)]) -> Vec<u8> {
 <head><title>{id}</title></head>
 <body>{body}</body>
 </html>"#,
-            id = id, body = body
+            id = id,
+            body = body
         );
-        zip.start_file(format!("OEBPS/Text/{}.xhtml", id), deflated).unwrap();
+        zip.start_file(format!("OEBPS/Text/{}.xhtml", id), deflated)
+            .unwrap();
         zip.write_all(content.as_bytes()).unwrap();
     }
 

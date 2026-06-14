@@ -1,6 +1,8 @@
+use anyhow::{Context as _, Result};
+use fb2::{
+    CiteElement, FictionBook, PoemStanza, SectionPart, StyleElement, StyleLinkElement, TitleElement,
+};
 use std::path::PathBuf;
-use anyhow::{Result, Context as _};
-use fb2::{FictionBook, SectionPart, CiteElement, PoemStanza, TitleElement, StyleElement, StyleLinkElement};
 
 pub struct Fb2Scan {
     sections: Vec<Section>,
@@ -10,7 +12,8 @@ impl Fb2Scan {
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
-        let book: FictionBook = quick_xml::de::from_reader(reader).context("Failed to parse FB2")?;
+        let book: FictionBook =
+            quick_xml::de::from_reader(reader).context("Failed to parse FB2")?;
         Ok(Self::from_book(book))
     }
 
@@ -37,7 +40,10 @@ impl Section {
     }
 
     pub fn pars(&self) -> Vec<&str> {
-        self.segment_indices.iter().map(|&(start, end)| &self.text[start..end]).collect::<Vec<_>>()
+        self.segment_indices
+            .iter()
+            .map(|&(start, end)| &self.text[start..end])
+            .collect::<Vec<_>>()
     }
 
     pub fn language(&self) -> Option<&str> {
@@ -133,7 +139,11 @@ fn title_to_text(title: &fb2::Title) -> String {
             TitleElement::Paragraph(p) => {
                 let t = para_to_md(p);
                 let trimmed = t.trim().to_string();
-                if trimmed.is_empty() { None } else { Some(trimmed) }
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
             }
             TitleElement::EmptyLine => None,
         })
@@ -237,7 +247,12 @@ fn collect_sections(fb2_section: &fb2::Section, out: &mut Vec<Section>) {
 
         if !text.is_empty() || title.is_some() {
             let lang = whatlang::detect(&text).map(|x| x.lang().eng_name().to_string());
-            out.push(Section { title, text, segment_indices, language: lang });
+            out.push(Section {
+                title,
+                text,
+                segment_indices,
+                language: lang,
+            });
         }
 
         for subsection in &content.sections {
@@ -264,7 +279,6 @@ impl Fb2Scan {
         Self { sections }
     }
 }
-
 
 #[cfg(test)]
 mod tests;

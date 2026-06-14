@@ -141,7 +141,10 @@ impl slm_inference::SlmModelConfig for ModelConfig {
 
 impl ModelConfig {
     #[inline(never)]
-    pub fn load_llama_model(&self, path: &str) -> Result<*mut slm_ikllama_sys::llama_model,GgufLoaderError> {
+    pub fn load_llama_model(
+        &self,
+        path: &str,
+    ) -> Result<*mut slm_ikllama_sys::llama_model, GgufLoaderError> {
         let cstr = CString::new(path)
             .map_err(|_| FfiError::Error("path string allocation".to_string()))?;
         let llama_model =

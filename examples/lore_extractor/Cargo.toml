@@ -2,6 +2,7 @@
 name = "lore_extractor"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 clap = {workspace = true}
@@ -11,7 +12,7 @@ tracing = { workspace = true }
 epubscan = {path="../../crates/epubscan", version = "^0.1.0"}
 slm_inference = {path = "../../slm_inference", version="^0.1.0"}
 slm_llama = {path = "../../crates/slm_llama", version="^0.1.0", features=["vulkan"]}
-slm_ikllama = {path = "../../crates/slm_ikllama", version="^0.1.0", features=["cuda"]}
-itertools = "0.14.0"
+slm_ikllama = {path = "../../crates/slm_ikllama", version="^0.1.0", features=["cuda","native"]}
+itertools = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}

@@ -8,7 +8,7 @@ use slm_inference::errors::{
     BatchError, ContextBuilderError, ContextError, DecodeError, FfiError, SamplingError,
     StringToTokenError, TokenToStringError,
 };
-use slm_inference::{SlmPos, SlmToken, SlmContext, SlmEditLevel, SlmContextBuilder, SlmKvType};
+use slm_inference::{SlmContext, SlmContextBuilder, SlmEditLevel, SlmKvType, SlmPos, SlmToken};
 
 #[derive(Clone)]
 struct LlamaSamplerFree;
@@ -297,7 +297,7 @@ impl KVType {
 impl Builder {
     #[inline(never)]
     pub fn new(model: Model) -> Self {
-        let mut params= unsafe { llama_cpp_sys_2::llama_context_default_params() };
+        let mut params = unsafe { llama_cpp_sys_2::llama_context_default_params() };
         params.flash_attn_type = llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_ENABLED;
         Self {
             model,
@@ -395,5 +395,4 @@ impl SlmContextBuilder<Context> for Builder {
         self.top_p = top_p;
         self
     }
-
 }

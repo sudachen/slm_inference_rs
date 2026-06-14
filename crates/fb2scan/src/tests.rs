@@ -29,7 +29,11 @@ fn plain_paragraph() {
 #[test]
 fn bold_inline() {
     let secs = parse_sections("<section><p>A <strong>bold</strong> B</p></section>");
-    assert!(secs[0].text().contains("**bold**"), "got: {:?}", secs[0].text());
+    assert!(
+        secs[0].text().contains("**bold**"),
+        "got: {:?}",
+        secs[0].text()
+    );
 }
 
 #[test]
@@ -41,25 +45,41 @@ fn emphasis_inline() {
 #[test]
 fn strikethrough_inline() {
     let secs = parse_sections("<section><p>A <strikethrough>del</strikethrough> B</p></section>");
-    assert!(secs[0].text().contains("~~del~~"), "got: {:?}", secs[0].text());
+    assert!(
+        secs[0].text().contains("~~del~~"),
+        "got: {:?}",
+        secs[0].text()
+    );
 }
 
 #[test]
 fn code_inline() {
     let secs = parse_sections("<section><p>A <code>fn x()</code> B</p></section>");
-    assert!(secs[0].text().contains("`fn x()`"), "got: {:?}", secs[0].text());
+    assert!(
+        secs[0].text().contains("`fn x()`"),
+        "got: {:?}",
+        secs[0].text()
+    );
 }
 
 #[test]
 fn subtitle_becomes_heading() {
     let secs = parse_sections("<section><subtitle>Chapter One</subtitle></section>");
-    assert!(secs[0].text().contains("## Chapter One"), "got: {:?}", secs[0].text());
+    assert!(
+        secs[0].text().contains("## Chapter One"),
+        "got: {:?}",
+        secs[0].text()
+    );
 }
 
 #[test]
 fn cite_paragraph_italic() {
     let secs = parse_sections("<section><cite><p>Quoted text</p></cite></section>");
-    assert!(secs[0].text().contains("*Quoted text*"), "got: {:?}", secs[0].text());
+    assert!(
+        secs[0].text().contains("*Quoted text*"),
+        "got: {:?}",
+        secs[0].text()
+    );
 }
 
 #[test]
@@ -67,15 +87,17 @@ fn image_skipped() {
     let body = r##"<section><image l:href="#img.jpg"/><p>After image</p></section>"##;
     let secs = parse_sections(body);
     assert_eq!(secs.len(), 1);
-    assert!(!secs[0].text().contains("img"), "image leaked: {:?}", secs[0].text());
+    assert!(
+        !secs[0].text().contains("img"),
+        "image leaked: {:?}",
+        secs[0].text()
+    );
     assert!(secs[0].text().contains("After image"));
 }
 
 #[test]
 fn section_title_extracted() {
-    let secs = parse_sections(
-        "<section><title><p>My Chapter</p></title><p>Content</p></section>",
-    );
+    let secs = parse_sections("<section><title><p>My Chapter</p></title><p>Content</p></section>");
     assert_eq!(secs[0].title(), Some("My Chapter"));
     assert!(secs[0].text().contains("Content"));
 }

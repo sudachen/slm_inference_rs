@@ -1,16 +1,16 @@
 #![allow(unused)]
 
-use std::path::PathBuf;
-use clap::{Parser,ValueEnum};
+use crate::backend::{BackendId, ModelId, selector};
 use anyhow::Result;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader};
-use serde::{Deserialize, Serialize};
-use slm_inference::*;
+use clap::{Parser, ValueEnum};
 use epubscan::EpubScan;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use slm_inference::*;
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use tracing::{debug, error};
-use crate::backend::{BackendId, selector, ModelId};
 
 #[derive(Parser, Debug)]
 pub struct YesNoArgs {
@@ -18,7 +18,7 @@ pub struct YesNoArgs {
     pub backend: BackendId,
     #[arg(short, long, default_value_t = ModelId::default())]
     pub model: ModelId,
-    #[arg(short,long)]
+    #[arg(short, long)]
     pub think: bool,
     #[arg(long)]
     pub cpu: bool,
@@ -32,8 +32,10 @@ pub struct YesNoArgs {
 
 impl YesNoArgs {
     pub fn run(&self) -> Result<()> {
-        println!("Answer Yes/No for questions over {} file(s):",
-                 self.input.len());
+        println!(
+            "Answer Yes/No for questions over {} file(s):",
+            self.input.len()
+        );
         let mut outfile = OpenOptions::new()
             .create(true)
             .append(true)
@@ -48,10 +50,13 @@ impl YesNoArgs {
                 oracle.user(&section.text());
             }
         }
-        let questions: Vec<YesNoQuest> = self.questions.iter()
+        let questions: Vec<YesNoQuest> = self
+            .questions
+            .iter()
             .map(|p| -> Result<Vec<YesNoQuest>> {
                 let f = std::fs::File::open(p)?;
-                BufReader::new(f).lines()
+                BufReader::new(f)
+                    .lines()
                     .filter_map(|l| l.ok())
                     .filter(|l| !l.trim().is_empty())
                     .map(|l| Ok(serde_json::from_str(&l)?))

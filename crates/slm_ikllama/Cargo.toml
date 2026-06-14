@@ -3,6 +3,15 @@ name = "slm_ikllama"
 version = "0.1.0"
 edition = "2024"
 
+description = "ik_llama.cpp backend for slm_inference"
+
+authors.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+
 [dependencies]
 slm_ikllama_sys = { path = "../slm_ikllama_sys", version = "^0.1.0" }
 slm_inference = { path = "../../slm_inference", version = "^0.1.0" }

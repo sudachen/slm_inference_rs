@@ -1,5 +1,5 @@
-use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::SlmRole;
+use crate::formatter::{SlmFormatter, SlmToolStyle};
 
 pub struct Qwen25Formatter {
     thinking: bool,
@@ -71,7 +71,11 @@ impl SlmFormatter for Qwen25Formatter {
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {
         // Standard Qwen 2.5 expects a function call as a plain JSON object
         // inside a regular assistant response.
-        format!(r#"{{"name": "{}", "arguments": {}}}"#, name, arguments.trim())
+        format!(
+            r#"{{"name": "{}", "arguments": {}}}"#,
+            name,
+            arguments.trim()
+        )
     }
 
     fn format_tool_response(&self, _name: &str, content: &str) -> String {
@@ -96,10 +100,7 @@ impl SlmFormatter for Qwen25Formatter {
             cleaned = cleaned.replace(tag, "");
         }
 
-        let qwen_channels = [
-            "<think>",
-            "</think>",
-        ];
+        let qwen_channels = ["<think>", "</think>"];
 
         for tag in qwen_channels {
             cleaned = cleaned.replace(tag, "");

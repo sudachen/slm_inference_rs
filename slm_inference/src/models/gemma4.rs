@@ -1,15 +1,15 @@
-use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::SlmRole;
+use crate::formatter::{SlmFormatter, SlmToolStyle};
 
 pub struct GemmaFormatter {
     flavor: Gemma4Flavor,
-    thinking: bool
+    thinking: bool,
 }
 
 pub enum Gemma4Flavor {
     GoogleOfficial,
     UnslothFixed,
-    Vanilla
+    Vanilla,
 }
 
 impl GemmaFormatter {
@@ -19,7 +19,9 @@ impl GemmaFormatter {
 }
 
 impl SlmFormatter for GemmaFormatter {
-    fn bos(&self) -> Option<&str> { Some("<bos>") }
+    fn bos(&self) -> Option<&str> {
+        Some("<bos>")
+    }
     fn turn_start(&self, role: &SlmRole) -> String {
         match role {
             SlmRole::System => "<|turn>system\n".to_string(),
@@ -60,20 +62,26 @@ impl SlmFormatter for GemmaFormatter {
         }
     }
 
-    fn tool_style(&self) -> SlmToolStyle { SlmToolStyle::Inline }
+    fn tool_style(&self) -> SlmToolStyle {
+        SlmToolStyle::Inline
+    }
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {
         let args = arguments.trim();
         match self.flavor {
-            Gemma4Flavor::GoogleOfficial =>
-                format!("<|tool_call>call:{}{{{{{}}}}}<tool_call|>", name, args),
-            _ =>
-                format!("<|tool_call>call:{}{{{}}}<tool_call|>", name, args)
+            Gemma4Flavor::GoogleOfficial => {
+                format!("<|tool_call>call:{}{{{{{}}}}}<tool_call|>", name, args)
+            }
+            _ => format!("<|tool_call>call:{}{{{}}}<tool_call|>", name, args),
         }
     }
 
     fn format_tool_response(&self, name: &str, content: &str) -> String {
-        format!("<|tool_response>response:{}{{value:{}}}<tool_response|>", name, content.trim())
+        format!(
+            "<|tool_response>response:{}{{value:{}}}<tool_response|>",
+            name,
+            content.trim()
+        )
     }
 
     fn strip_tags(&self, text: &str) -> String {

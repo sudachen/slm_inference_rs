@@ -17,7 +17,7 @@ pub trait SlmFormatter {
     /// Needed so that your streaming parser can separate on the fly
     /// reasoning_content from the final text (for example, for display to the user).
     fn reasoning_bounds(&self) -> Option<(&str, &str)>; // Example: Some(("<think>", "</think>"))
-    
+
     /// How to wrap the text of thoughts if we forcibly push ready thoughts into the cache
     /// (for example, restoring context from a database)
     fn wrap_reasoning(&self, content: &str) -> String;
@@ -72,8 +72,11 @@ pub trait SlmFormatter {
                 }
             }
         }
-        let thinking = if thinking.is_empty() { None } else { Some(thinking) };
+        let thinking = if thinking.is_empty() {
+            None
+        } else {
+            Some(thinking)
+        };
         (self.strip_tags(&cleaned).trim().to_string(), thinking)
     }
 }
-

@@ -3,7 +3,6 @@ mod batch;
 mod context;
 mod model;
 
-pub use model::{ModelConfig,Model};
-pub use context::{Context,Builder,KVType};
-pub use batch::{Batch,Token};
-
+pub use batch::{Batch, Token};
+pub use context::{Builder, Context, KVType};
+pub use model::{Model, ModelConfig};

@@ -1,22 +1,22 @@
 pub mod hf;
 pub use hf::SlmHfModel;
+mod answer;
 pub mod core;
 pub mod errors;
-pub mod inference;
-mod oracle;
-mod answer;
 mod formatter;
+pub mod inference;
 pub mod models;
+mod oracle;
 
 use std::path::Path;
 use std::result::Result;
 
+pub use answer::SlmAnswer;
 use errors::*;
-pub use inference::{SlmInference, SlmSimpleInference, SlmBrake, SlmBoxedBrakeFn};
-pub use oracle::{SlmOracle, SlmSimpleOracle};
-pub use answer::{SlmAnswer};
 pub use formatter::SlmFormatter;
+pub use inference::{SlmBoxedBrakeFn, SlmBrake, SlmInference, SlmSimpleInference};
 pub use models::SlmDynamicFormatter;
+pub use oracle::{SlmOracle, SlmSimpleOracle};
 
 pub trait SlmToken: Copy {
     fn as_i32(&self) -> i32;
@@ -64,18 +64,19 @@ pub struct SlmPos {
 
 #[allow(dead_code)]
 impl SlmPos {
-    fn fork_id(&self) -> usize { self.fork_id }
-    fn token_pos(&self) -> usize { self.token_pos }
-    pub fn new(token_pos: usize, fork_id: usize) -> SlmPos { Self { token_pos, fork_id } }
+    fn fork_id(&self) -> usize {
+        self.fork_id
+    }
+    fn token_pos(&self) -> usize {
+        self.token_pos
+    }
+    pub fn new(token_pos: usize, fork_id: usize) -> SlmPos {
+        Self { token_pos, fork_id }
+    }
 }
 
 pub trait SlmBatch<Token: SlmToken> {
-    fn add(
-        &mut self,
-        token: Token,
-        pos: SlmPos,
-        logits: bool,
-    ) -> Result<(), BatchError>;
+    fn add(&mut self, token: Token, pos: SlmPos, logits: bool) -> Result<(), BatchError>;
     fn clear(&mut self);
     fn n_tokens(&self) -> usize;
     fn n_max(&self) -> usize;
@@ -110,14 +111,13 @@ pub trait SlmContextBuilder<T> {
     fn with_n_batch(self, n_batch: usize) -> Self;
 }
 
-#[derive(Debug,Clone,Copy,Default,PartialEq,Eq,PartialOrd)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd)]
 pub enum SlmEditLevel {
     #[default]
     DumpRestore = 0,
     Cut = 1,
-    Truncate = 2
+    Truncate = 2,
 }
-
 
 /// Core inference context that owns a KV cache and provides all token-level operations
 /// required for autoregressive text generation.
@@ -197,11 +197,10 @@ pub trait SlmContext {
 
     /// Serialises the full context state (KV cache, sampler state, etc.) to a byte
     /// buffer so it can be persisted or transferred.
-    fn dump(&mut self) -> Result<Vec<u8>,ContextError>;
+    fn dump(&mut self) -> Result<Vec<u8>, ContextError>;
 
     /// Restores a context state previously produced by [`dump`](Self::dump).
-    fn restore(&mut self, data: Vec<u8>) -> Result<(),ContextError>;
+    fn restore(&mut self, data: Vec<u8>) -> Result<(), ContextError>;
 
     fn edit_level(&self) -> SlmEditLevel;
 }
-

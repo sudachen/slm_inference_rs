@@ -1,5 +1,5 @@
-use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::SlmRole;
+use crate::formatter::{SlmFormatter, SlmToolStyle};
 
 pub struct MistralFormatter {
     flavor: MistralFlavor,
@@ -98,7 +98,10 @@ impl SlmFormatter for MistralFormatter {
         let args = arguments.trim();
         // The official Mistral v3 spec requires function calls to be
         // a JSON array of objects strictly wrapped in [TOOL_CALLS] tokens
-        format!(r#"[TOOL_CALLS][{{"name": "{}", "arguments": {}}}][\/TOOL_CALLS]"#, name, args)
+        format!(
+            r#"[TOOL_CALLS][{{"name": "{}", "arguments": {}}}][\/TOOL_CALLS]"#,
+            name, args
+        )
     }
 
     fn format_tool_response(&self, _name: &str, content: &str) -> String {

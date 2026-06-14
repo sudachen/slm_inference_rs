@@ -1,7 +1,16 @@
 [package]
 name = "slm_ikllama_sys"
 version = "0.1.0"
-edition = "2024"
+
+description = "ik_llama.cpp rust sys bindings"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
 
 
 include = [
@@ -9,6 +18,8 @@ include = [
     "wrapper.cpp",
     "build.rs",
     "src",
+    "ik_llama.cpp/CMakeLists.txt",
+    "ik_llama.cpp/cmake",
     "ik_llama.cpp/common/cmake",
     "ik_llama.cpp/common/**/*.h*",
     "ik_llama.cpp/common/**/*.c*",
@@ -23,6 +34,7 @@ include = [
     "ik_llama.cpp/include/**/*.h*",
     "ik_llama.cpp/pocs",
     "ik_llama.cpp/vendor",
+    "ik_llama.cpp/convert_hf_to_gguf.py"
 ]
 
 [dependencies]

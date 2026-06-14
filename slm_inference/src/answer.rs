@@ -1,9 +1,9 @@
+use crate::SlmFormatter;
 use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
-use crate::SlmFormatter;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub enum SlmAnswer {
     // (answer, fork_id, thinking)
     Complete(String, usize, Option<String>),
@@ -40,7 +40,7 @@ impl SlmAnswer {
         F: FnOnce(String) -> String,
     {
         match self {
-            Self::Complete(text, fork_id,thought) => Self::Complete(f(text), fork_id, thought),
+            Self::Complete(text, fork_id, thought) => Self::Complete(f(text), fork_id, thought),
             Self::Partial(text, fork_id) => Self::Partial(f(text), fork_id),
             Self::Incomplete(text, fork_id) => Self::Incomplete(f(text), fork_id),
         }
@@ -48,18 +48,18 @@ impl SlmAnswer {
 
     pub fn split_thought(self, formatter: &dyn SlmFormatter) -> SlmAnswer {
         match self {
-            Self::Complete(text,fork_id,None) => {
+            Self::Complete(text, fork_id, None) => {
                 let (text, thought) = formatter.strip_thought(&text);
-                SlmAnswer::Complete(text,fork_id,thought)
-            },
-            _ => self
+                SlmAnswer::Complete(text, fork_id, thought)
+            }
+            _ => self,
         }
     }
 
-    pub fn thought(&self)  -> Option<&str> {
+    pub fn thought(&self) -> Option<&str> {
         match self {
-            Self::Complete(_,_, thought) => thought.as_deref(),
-            _ => None
+            Self::Complete(_, _, thought) => thought.as_deref(),
+            _ => None,
         }
     }
 }

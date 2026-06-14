@@ -1,9 +1,9 @@
+use anyhow::{Context as _, Result};
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::{Decoder, Reader};
 use std::collections::HashMap;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
-use anyhow::{Context as _, Result};
-use quick_xml::{Decoder, Reader};
-use quick_xml::events::{BytesStart, Event};
 use zip::ZipArchive;
 
 pub struct EpubScan {
@@ -52,7 +52,10 @@ impl Section {
     }
 }
 
-fn read_zip_entry<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>, name: &str) -> Result<String> {
+fn read_zip_entry<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    name: &str,
+) -> Result<String> {
     let mut entry = archive
         .by_name(name)
         .with_context(|| format!("Entry not found in EPUB: {}", name))?;
@@ -72,7 +75,9 @@ fn normalize_path(path: &str) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for component in path.split('/') {
         match component {
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             "." | "" => {}
             s => parts.push(s),
         }
@@ -127,7 +132,10 @@ struct OpfData {
     language: Option<String>,
 }
 
-fn parse_opf<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>, opf_path: &str) -> Result<OpfData> {
+fn parse_opf<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    opf_path: &str,
+) -> Result<OpfData> {
     let xml = read_zip_entry(archive, opf_path)?;
     let opf_dir = dir_of(opf_path).to_string();
     let mut manifest: HashMap<String, ManifestItem> = HashMap::new();
@@ -143,41 +151,49 @@ fn parse_opf<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>, opf_path: &st
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().local_name().as_ref() {
-                    b"metadata" => in_metadata = true,
-                    b"language" if in_metadata => in_language = true,
-                    b"spine" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"toc" {
-                                ncx_id = Some(attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned());
-                            }
+            Ok(Event::Start(e)) => match e.name().local_name().as_ref() {
+                b"metadata" => in_metadata = true,
+                b"language" if in_metadata => in_language = true,
+                b"spine" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"toc" {
+                            ncx_id = Some(
+                                attr.decode_and_unescape_value(decoder)
+                                    .unwrap_or_default()
+                                    .into_owned(),
+                            );
                         }
                     }
-                    b"item" => parse_manifest_item(&e, decoder, &mut manifest),
-                    b"itemref" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"idref" {
-                                spine.push(attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned());
-                            }
-                        }
-                    }
-                    _ => {}
                 }
-            }
-            Ok(Event::Empty(e)) => {
-                match e.name().local_name().as_ref() {
-                    b"item" => parse_manifest_item(&e, decoder, &mut manifest),
-                    b"itemref" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"idref" {
-                                spine.push(attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned());
-                            }
+                b"item" => parse_manifest_item(&e, decoder, &mut manifest),
+                b"itemref" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"idref" {
+                            spine.push(
+                                attr.decode_and_unescape_value(decoder)
+                                    .unwrap_or_default()
+                                    .into_owned(),
+                            );
                         }
                     }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
+            Ok(Event::Empty(e)) => match e.name().local_name().as_ref() {
+                b"item" => parse_manifest_item(&e, decoder, &mut manifest),
+                b"itemref" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"idref" {
+                            spine.push(
+                                attr.decode_and_unescape_value(decoder)
+                                    .unwrap_or_default()
+                                    .into_owned(),
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            },
             Ok(Event::End(e)) => match e.name().local_name().as_ref() {
                 b"metadata" => in_metadata = false,
                 b"language" => in_language = false,
@@ -185,7 +201,9 @@ fn parse_opf<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>, opf_path: &st
             },
             Ok(Event::Text(t)) if in_language && language.is_none() => {
                 let s = t.xml10_content().unwrap_or_default().trim().to_string();
-                if !s.is_empty() { language = Some(s); }
+                if !s.is_empty() {
+                    language = Some(s);
+                }
             }
             Ok(Event::Eof) => break,
             _ => {}
@@ -202,18 +220,43 @@ fn parse_opf<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>, opf_path: &st
         }
     }
 
-    Ok(OpfData { opf_dir, manifest, spine, ncx_id, language })
+    Ok(OpfData {
+        opf_dir,
+        manifest,
+        spine,
+        ncx_id,
+        language,
+    })
 }
 
-fn parse_manifest_item(e: &BytesStart, decoder: Decoder, manifest: &mut HashMap<String, ManifestItem>) {
+fn parse_manifest_item(
+    e: &BytesStart,
+    decoder: Decoder,
+    manifest: &mut HashMap<String, ManifestItem>,
+) {
     let mut id = String::new();
     let mut href = String::new();
     let mut media_type = String::new();
     for attr in e.attributes().flatten() {
         match attr.key.as_ref() {
-            b"id" => id = attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned(),
-            b"href" => href = attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned(),
-            b"media-type" => media_type = attr.decode_and_unescape_value(decoder).unwrap_or_default().into_owned(),
+            b"id" => {
+                id = attr
+                    .decode_and_unescape_value(decoder)
+                    .unwrap_or_default()
+                    .into_owned()
+            }
+            b"href" => {
+                href = attr
+                    .decode_and_unescape_value(decoder)
+                    .unwrap_or_default()
+                    .into_owned()
+            }
+            b"media-type" => {
+                media_type = attr
+                    .decode_and_unescape_value(decoder)
+                    .unwrap_or_default()
+                    .into_owned()
+            }
             _ => {}
         }
     }
@@ -244,11 +287,16 @@ fn parse_ncx<R: Read + std::io::Seek>(
                     in_nav_label = true;
                     current_label.clear();
                 }
-                b"text" if in_nav_label => { in_text = true; }
+                b"text" if in_nav_label => {
+                    in_text = true;
+                }
                 b"content" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"src" {
-                            current_src = resolve(&ncx_dir, &attr.decode_and_unescape_value(decoder).unwrap_or_default());
+                            current_src = resolve(
+                                &ncx_dir,
+                                &attr.decode_and_unescape_value(decoder).unwrap_or_default(),
+                            );
                         }
                     }
                 }
@@ -258,7 +306,10 @@ fn parse_ncx<R: Read + std::io::Seek>(
                 if e.name().local_name().as_ref() == b"content" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"src" {
-                            current_src = resolve(&ncx_dir, &attr.decode_and_unescape_value(decoder).unwrap_or_default());
+                            current_src = resolve(
+                                &ncx_dir,
+                                &attr.decode_and_unescape_value(decoder).unwrap_or_default(),
+                            );
                         }
                     }
                 }
@@ -268,7 +319,9 @@ fn parse_ncx<R: Read + std::io::Seek>(
                     in_nav_label = false;
                     in_text = false;
                 }
-                b"text" => { in_text = false; }
+                b"text" => {
+                    in_text = false;
+                }
                 b"navPoint" => {
                     if !current_src.is_empty() && !current_label.is_empty() {
                         toc.entry(current_src.clone())
@@ -342,7 +395,9 @@ pub(crate) fn parse_xhtml(xml: &str) -> (String, Vec<(usize, usize)>) {
                     in_body = true;
                     continue;
                 }
-                if !in_body { continue; }
+                if !in_body {
+                    continue;
+                }
 
                 if skip_depth > 0 {
                     skip_depth += 1;
@@ -350,7 +405,9 @@ pub(crate) fn parse_xhtml(xml: &str) -> (String, Vec<(usize, usize)>) {
                 }
 
                 match tag {
-                    b"script" | b"style" | b"svg" => { skip_depth = 1; }
+                    b"script" | b"style" | b"svg" => {
+                        skip_depth = 1;
+                    }
                     b"strong" | b"b" => {
                         current.push_str("**");
                         inline_stack.push(InlineMarker::Bold);
@@ -386,7 +443,9 @@ pub(crate) fn parse_xhtml(xml: &str) -> (String, Vec<(usize, usize)>) {
                     in_body = false;
                     continue;
                 }
-                if !in_body { continue; }
+                if !in_body {
+                    continue;
+                }
 
                 if skip_depth > 0 {
                     skip_depth -= 1;
@@ -470,11 +529,17 @@ fn extract_sections<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> Res
         }
 
         let title = toc_map.get(&zip_path).cloned();
-        let language = opf.language.clone().or_else(|| {
-            whatlang::detect(&text).map(|x| x.lang().eng_name().to_string())
-        });
+        let language = opf
+            .language
+            .clone()
+            .or_else(|| whatlang::detect(&text).map(|x| x.lang().eng_name().to_string()));
 
-        sections.push(Section { title, text, language, segment_indices });
+        sections.push(Section {
+            title,
+            text,
+            language,
+            segment_indices,
+        });
     }
 
     Ok(sections)

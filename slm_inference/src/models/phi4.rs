@@ -1,5 +1,5 @@
-use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::SlmRole;
+use crate::formatter::{SlmFormatter, SlmToolStyle};
 
 pub struct Phi4Formatter {
     thinking: bool,
@@ -69,7 +69,11 @@ impl SlmFormatter for Phi4Formatter {
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {
         // Advanced Phi-4 function-calling fine-tunes expect plain JSON
-        format!(r#"{{"name": "{}", "arguments": {}}}"#, name, arguments.trim())
+        format!(
+            r#"{{"name": "{}", "arguments": {}}}"#,
+            name,
+            arguments.trim()
+        )
     }
 
     fn format_tool_response(&self, _name: &str, content: &str) -> String {
@@ -92,10 +96,7 @@ impl SlmFormatter for Phi4Formatter {
             cleaned = cleaned.replace(tag, "");
         }
 
-        let phi4_channels = [
-            "<think>",
-            "</think>",
-        ];
+        let phi4_channels = ["<think>", "</think>"];
 
         for tag in phi4_channels {
             cleaned = cleaned.replace(tag, "");

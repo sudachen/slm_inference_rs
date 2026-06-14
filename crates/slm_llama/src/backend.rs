@@ -21,7 +21,6 @@ pub fn init() -> Backend {
     Backend {}
 }
 
-
 #[inline(never)]
 unsafe extern "C" fn llama_log_callback(
     level: c_uint,

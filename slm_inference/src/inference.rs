@@ -1,8 +1,17 @@
 use crate::errors::{ContextError, InferenceError};
-use crate::{SlmContext, SlmBatch, SlmPos, SlmAnswer, SlmEditLevel};
+use crate::{SlmAnswer, SlmBatch, SlmContext, SlmEditLevel, SlmPos};
 use tracing::error;
 
-pub type SlmBoxedBrakeFn = Box<dyn FnMut(/*answer*/ &str, /*last_token*/ &str, /*n_tokens*/ usize, /*fork_id*/ usize) -> SlmBrake + Send + 'static>;
+pub type SlmBoxedBrakeFn = Box<
+    dyn FnMut(
+            /*answer*/ &str,
+            /*last_token*/ &str,
+            /*n_tokens*/ usize,
+            /*fork_id*/ usize,
+        ) -> SlmBrake
+        + Send
+        + 'static,
+>;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum SlmBrake {
@@ -19,9 +28,7 @@ pub enum SlmBrake {
 }
 
 impl SlmBrake {
-    pub fn token_limit(
-        max_tokens: usize,
-    ) -> SlmBoxedBrakeFn {
+    pub fn token_limit(max_tokens: usize) -> SlmBoxedBrakeFn {
         Box::new(move |_, _, n, _| match n >= max_tokens {
             true => SlmBrake::Finish,
             false => SlmBrake::Continue,
@@ -32,7 +39,13 @@ impl SlmBrake {
         matches!(self, SlmBrake::Finish | SlmBrake::Stop | SlmBrake::Delay)
     }
 
-    pub fn brake_on(a: &str, b: &str, n: usize, fork_id: usize, lf: &mut [Option<SlmBoxedBrakeFn>]) -> Self {
+    pub fn brake_on(
+        a: &str,
+        b: &str,
+        n: usize,
+        fork_id: usize,
+        lf: &mut [Option<SlmBoxedBrakeFn>],
+    ) -> Self {
         lf.iter_mut()
             .flatten()
             .map(|f| f(a, b, n, fork_id))
@@ -41,18 +54,20 @@ impl SlmBrake {
     }
 }
 
-
 pub trait SlmInference {
     fn prefill(&mut self, prompt: &str) -> Result<(), InferenceError>;
-    fn generate_until(&mut self, f: &mut [Option<SlmBoxedBrakeFn>]) -> Result<SlmAnswer, InferenceError>;
+    fn generate_until(
+        &mut self,
+        f: &mut [Option<SlmBoxedBrakeFn>],
+    ) -> Result<SlmAnswer, InferenceError>;
     fn generate(&mut self, max_tokens: usize) -> Result<SlmAnswer, InferenceError> {
         self.generate_until(&mut [Some(SlmBrake::token_limit(max_tokens))])
     }
     fn clear(&mut self) -> Result<(), InferenceError>;
     fn save(&mut self) -> Result<(), InferenceError>;
     fn rollback(&mut self) -> Result<(), InferenceError>;
-    fn dump(&mut self) -> Result<Vec<u8>,InferenceError>;
-    fn restore(&mut self, data: Vec<u8>) -> Result<(),InferenceError>;
+    fn dump(&mut self) -> Result<Vec<u8>, InferenceError>;
+    fn restore(&mut self, data: Vec<u8>) -> Result<(), InferenceError>;
 }
 
 pub struct SlmSimpleInference<C: SlmContext> {
@@ -64,7 +79,7 @@ pub struct SlmSimpleInference<C: SlmContext> {
 }
 
 impl<C: SlmContext> SlmSimpleInference<C> {
-    pub fn new(context: C) -> Result<Self,InferenceError> {
+    pub fn new(context: C) -> Result<Self, InferenceError> {
         let n_batch = context.max_batch_len();
         let batch = context.new_batch(n_batch, 1)?;
         Ok(Self {
@@ -72,7 +87,7 @@ impl<C: SlmContext> SlmSimpleInference<C> {
             n_cur: 0,
             batch,
             save_point: None,
-            tokens: Vec::new()
+            tokens: Vec::new(),
         })
     }
 }
@@ -87,7 +102,8 @@ impl<C: SlmContext> SlmSimpleInference<C> {
             for (i, token) in self.tokens[base_pos..].iter().enumerate() {
                 let pos = base_pos + i;
                 let is_last = pos == last_index;
-                self.batch.add(*token,SlmPos::new(pos,0), is_last && logits)?;
+                self.batch
+                    .add(*token, SlmPos::new(pos, 0), is_last && logits)?;
                 if self.batch.n_tokens() >= n_batch || is_last {
                     self.n_cur += self.batch.n_tokens();
                     self.context.decode(&mut self.batch)?;
@@ -110,7 +126,10 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
         self.tokens.extend_from_slice(&tokens_list);
         Ok(())
     }
-    fn generate_until(&mut self, filter: &mut [Option<SlmBoxedBrakeFn>]) -> Result<SlmAnswer, InferenceError> {
+    fn generate_until(
+        &mut self,
+        filter: &mut [Option<SlmBoxedBrakeFn>],
+    ) -> Result<SlmAnswer, InferenceError> {
         let mut response_str = String::with_capacity(4096);
         let mut brake = SlmBrake::Continue;
         let mut n_tokens = 0usize;
@@ -123,8 +142,8 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
                 Some(t) => t,
                 None => {
                     self.batch.clear();
-                    return Ok(SlmAnswer::Complete(response_str, 0, None))
-                },
+                    return Ok(SlmAnswer::Complete(response_str, 0, None));
+                }
             };
             n_tokens += 1;
             match self.context.token_to_bytes(token, 64, false, None) {
@@ -135,12 +154,12 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
                 }
                 Err(e) => {
                     error!("Failed to extract token bytes: {:?}", e);
-                    return Err(e.into())
+                    return Err(e.into());
                 }
             }
             self.batch.clear();
             if brake == SlmBrake::Continue || brake == SlmBrake::Delay {
-                self.batch.add(token, SlmPos::new(self.n_cur,0), true)?;
+                self.batch.add(token, SlmPos::new(self.n_cur, 0), true)?;
                 self.tokens.push(token);
                 self.n_cur += 1;
             }
@@ -148,7 +167,7 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
                 self.context.decode(&mut self.batch)?;
             }
         }
-        Ok(SlmAnswer::Partial(response_str,0))
+        Ok(SlmAnswer::Partial(response_str, 0))
     }
     fn clear(&mut self) -> Result<(), InferenceError> {
         self.batch.clear();
@@ -159,7 +178,7 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
     fn save(&mut self) -> Result<(), InferenceError> {
         //self.save_point = Some(SlmPos::new(self.n_cur,0));
         // speculative save
-        self.save_point = Some(SlmPos::new(self.tokens.len(),0));
+        self.save_point = Some(SlmPos::new(self.tokens.len(), 0));
         Ok(())
     }
 
@@ -179,10 +198,9 @@ impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
                         self.context.drop(s.fork_id)?;
                         self.n_cur = 0;
                     }
-
                 }
-            },
-            None => return Err(ContextError::PosNotFound.into())
+            }
+            None => return Err(ContextError::PosNotFound.into()),
         }
         Ok(())
     }

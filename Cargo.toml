@@ -16,7 +16,9 @@ repository = "https://github.com/sudachen/slm_inference_rs"
 rust-version = "1.96.0"
 readme = "README.md"
 
-
+exclude = [
+    "examples/*"
+]
 
 [workspace.dependencies]
 slm_inference = { path = "slm_inference" }
@@ -44,3 +46,4 @@ find_cuda_helper = "0.2.0"
 cc = "1.2.62"
 thiserror = "2.0.18"
 enum_dispatch = "0.3"
+itertools = "0.14.0"

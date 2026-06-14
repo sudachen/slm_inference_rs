@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
 //mod yesno;
-mod sayhi;
 mod backend;
+mod sayhi;
 mod yesno;
 
 fn main() -> Result<(), anyhow::Error> {
@@ -34,4 +34,3 @@ pub enum Commands {
     #[command(name = "sayhi")]
     SayHi(sayhi::SayHiArgs),
 }
-

@@ -8,7 +8,7 @@ use slm_inference::errors::{
     BatchError, ContextBuilderError, ContextError, DecodeError, FfiError, SamplingError,
     StringToTokenError, TokenToStringError,
 };
-use slm_inference::{SlmPos, SlmToken, SlmContext, SlmEditLevel, SlmContextBuilder, SlmKvType};
+use slm_inference::{SlmContext, SlmContextBuilder, SlmEditLevel, SlmKvType, SlmPos, SlmToken};
 
 #[derive(Clone)]
 struct LlamaContextFree;
@@ -47,7 +47,6 @@ impl SlmContext for Context {
 
     #[inline(never)]
     fn decode(&mut self, batch: &mut Batch) -> Result<(), DecodeError> {
-
         let result =
             unsafe { slm_ikllama_sys::llama_decode(self.ctx.get_ptr(), batch.llama_batch) };
 
@@ -277,7 +276,7 @@ pub struct Builder {
 
 #[repr(u32)]
 #[allow(dead_code)]
-#[derive(Debug,Copy,Clone,PartialEq,Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum KVType {
     Q4_0 = slm_ikllama_sys::GGML_TYPE_Q4_0,
     Q5_0 = slm_ikllama_sys::GGML_TYPE_Q5_0,
@@ -288,15 +287,15 @@ pub enum KVType {
 }
 
 impl KVType {
-    pub fn from(t: SlmKvType) -> Option<(KVType,bool)> {
+    pub fn from(t: SlmKvType) -> Option<(KVType, bool)> {
         match t {
-            SlmKvType::Q4 => Some((KVType::Q4_0,true)),
-            SlmKvType::Q5 => Some((KVType::Q5_0,true)),
-            SlmKvType::Q6 => Some((KVType::Q6_0,true)),
-            SlmKvType::Q8 => Some((KVType::Q8_0,true)),
-            SlmKvType::RawQ8 => Some((KVType::Q8_0,false)),
-            SlmKvType::F16 => Some((KVType::F16,false)),
-            SlmKvType::F32 => Some((KVType::F32,false)),
+            SlmKvType::Q4 => Some((KVType::Q4_0, true)),
+            SlmKvType::Q5 => Some((KVType::Q5_0, true)),
+            SlmKvType::Q6 => Some((KVType::Q6_0, true)),
+            SlmKvType::Q8 => Some((KVType::Q8_0, true)),
+            SlmKvType::RawQ8 => Some((KVType::Q8_0, false)),
+            SlmKvType::F16 => Some((KVType::F16, false)),
+            SlmKvType::F32 => Some((KVType::F32, false)),
         }
     }
 }
@@ -349,7 +348,6 @@ impl SlmContextBuilder<Context> for Builder {
         let vocab_ptr = unsafe { slm_ikllama_sys::llama_model_get_vocab(model_ptr) };
         let n_vocab = unsafe { slm_ikllama_sys::llama_n_vocab(model_ptr) } as usize;
 
-
         // TODO: decide by arch from model metadata
         let edit_level = SlmEditLevel::Cut;
 
@@ -388,13 +386,12 @@ impl SlmContextBuilder<Context> for Builder {
 
     #[inline(never)]
     fn with_gen_type_kv(mut self, k: SlmKvType, v: SlmKvType) -> Self {
-        let (k,kh) = KVType::from(k).unwrap();
-        let (v,vh) = KVType::from(v).unwrap();
+        let (k, kh) = KVType::from(k).unwrap();
+        let (v, vh) = KVType::from(v).unwrap();
         self.params.type_k = k as u32;
         self.params.k_cache_hadamard = kh;
         self.params.type_v = v as u32;
         self.params.v_cache_hadamard = vh;
         self
     }
-
 }

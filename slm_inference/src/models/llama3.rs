@@ -1,11 +1,15 @@
-use crate::formatter::{SlmFormatter, SlmToolStyle};
 use crate::SlmRole;
+use crate::formatter::{SlmFormatter, SlmToolStyle};
 
 pub struct Llama3Formatter;
 
 impl SlmFormatter for Llama3Formatter {
-    fn bos(&self) -> Option<&str> { Some("<|begin_of_text|>") }
-    fn tool_style(&self) -> SlmToolStyle { SlmToolStyle::SeparateTurn }
+    fn bos(&self) -> Option<&str> {
+        Some("<|begin_of_text|>")
+    }
+    fn tool_style(&self) -> SlmToolStyle {
+        SlmToolStyle::SeparateTurn
+    }
 
     fn turn_start(&self, role: &SlmRole) -> String {
         match role {
@@ -33,7 +37,11 @@ impl SlmFormatter for Llama3Formatter {
     }
 
     fn format_tool_call(&self, name: &str, arguments_json: &str) -> String {
-        format!("{{\"name\": \"{}\", \"parameters\": {}}}", name, arguments_json.trim())
+        format!(
+            "{{\"name\": \"{}\", \"parameters\": {}}}",
+            name,
+            arguments_json.trim()
+        )
     }
 
     fn format_tool_response(&self, _name: &str, content: &str) -> String {
