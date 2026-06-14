@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+slm_ikllama_sys = { path = "../slm_ikllama_sys", version = "^0.1.0" }
+slm_inference = { path = "../../slm_inference", version = "^0.1.0" }
+tracing = { workspace = true }
+
+[features]
+cuda = ["slm_ikllama_sys/cuda"]
+native = ["slm_ikllama_sys/native"]
+default = ["cuda","native"]

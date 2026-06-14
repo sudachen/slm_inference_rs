@@ -3,7 +3,7 @@ use slm_inference::errors::BatchError;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Token(llama_cpp_sys_2::llama_token);
+pub struct Token(slm_ikllama_sys::llama_token);
 
 impl slm_inference::SlmToken for Token {
     fn as_i32(&self) -> i32 {
@@ -20,7 +20,7 @@ impl From<i32> for Token {
 #[derive(Debug)]
 pub struct Batch {
     pub allocated: usize,
-    pub llama_batch: llama_cpp_sys_2::llama_batch,
+    pub llama_batch: slm_ikllama_sys::llama_batch,
 }
 
 impl Batch {
@@ -30,7 +30,7 @@ impl Batch {
             i32::try_from(n_tokens).map_err(|_| BatchError::NtokTooLarge(n_tokens))?;
         let n_seq_max =
             i32::try_from(n_seq_max).map_err(|_| BatchError::NseqTooLarge(n_seq_max))?;
-        let batch = unsafe { llama_cpp_sys_2::llama_batch_init(n_tokens_i32, 0, n_seq_max) };
+        let batch = unsafe { slm_ikllama_sys::llama_batch_init(n_tokens_i32, 0, n_seq_max) };
 
         Ok(Batch {
             allocated: n_tokens,
@@ -50,17 +50,15 @@ impl slm_inference::SlmBatch<Token> for Batch {
         let offset = self.llama_batch.n_tokens;
         let token_pos = i32::try_from(pos.token_pos)
             .map_err(|_| BatchError::NtokTooLarge(pos.token_pos))?
-            as llama_cpp_sys_2::llama_pos;
+            as slm_ikllama_sys::llama_pos;
         let fork_id =
             i32::try_from(pos.fork_id).map_err(|_| BatchError::NseqTooLarge(pos.fork_id))?;
-        let offset_usize = usize::try_from(offset).expect("cannot fit n_tokens into a usize");
+        let offset_usize = usize::try_from(offset)
+            .map_err(|_| BatchError::InternalError("buffer offest is negative".to_string()))?;
         unsafe {
             self.llama_batch.token.add(offset_usize).write(token);
             self.llama_batch.pos.add(offset_usize).write(token_pos);
-            self.llama_batch.n_seq_id.add(offset_usize).write(
-                llama_cpp_sys_2::llama_seq_id::try_from(1)
-                    .expect("cannot fit seq_ids.len() into a llama_seq_id"),
-            );
+            self.llama_batch.n_seq_id.add(offset_usize).write(1);
             (*self.llama_batch.seq_id.add(offset_usize))
                 .add(0)
                 .write(fork_id);
@@ -91,7 +89,7 @@ impl<'a> Drop for Batch {
     fn drop(&mut self) {
         unsafe {
             if self.allocated > 0 {
-                llama_cpp_sys_2::llama_batch_free(self.llama_batch);
+                slm_ikllama_sys::llama_batch_free(self.llama_batch);
             }
         }
     }

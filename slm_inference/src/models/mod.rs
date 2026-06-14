@@ -1,8 +1,15 @@
 mod gemma4;
 mod llama3;
+mod mistal;
+mod qwen25;
+mod phi4;
 
-pub use gemma4::GemmaFormatter;
+pub use gemma4::{GemmaFormatter, Gemma4Flavor};
 pub use llama3::Llama3Formatter;
+pub use mistal::{MistralFormatter, MistralFlavor};
+pub use qwen25::Qwen25Formatter;
+pub use phi4::Phi4Formatter;
+
 use crate::formatter::SlmToolStyle;
 use crate::{SlmFormatter, SlmRole};
 use crate::errors::ModelFormatterError;
@@ -10,6 +17,9 @@ use crate::errors::ModelFormatterError;
 pub enum SlmDynamicFormatter {
     Gemma(GemmaFormatter),
     Llama3(Llama3Formatter),
+    Mistral(MistralFormatter),
+    Qwen25(Qwen25Formatter),
+    Phi4(Phi4Formatter),
 }
 
 impl TryFrom<&str> for SlmDynamicFormatter {
@@ -18,7 +28,13 @@ impl TryFrom<&str> for SlmDynamicFormatter {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
             "llama3" => Ok(Self::Llama3(Llama3Formatter)),
-            "gemma4" => Ok(Self::Gemma(GemmaFormatter)),
+            "gemma4" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::Vanilla,true))),
+            "gemma4-google" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::GoogleOfficial,true))),
+            "gemma4-unsloth" => Ok(Self::Gemma(GemmaFormatter::new(Gemma4Flavor::UnslothFixed,true))),
+            "mistral" => Ok(Self::Mistral(MistralFormatter::new(MistralFlavor::V3Tekken,true))),
+            "mistral-legacy" => Ok(Self::Mistral(MistralFormatter::new(MistralFlavor::Legacy,true))),
+            "qwen25" => Ok(Self::Qwen25(Qwen25Formatter::new(true))),
+            "phi4" => Ok(Self::Phi4(Phi4Formatter::new(true))),
             _ => Err(ModelFormatterError::UnknownModelFormatter(value.to_string())),
         }
     }
@@ -28,7 +44,10 @@ impl SlmDynamicFormatter {
     fn deref(&self) -> &dyn SlmFormatter {
         match self {
             Self::Llama3(f) => f,
-            Self::Gemma(f) => f
+            Self::Gemma(f) => f,
+            Self::Mistral(f) => f,
+            Self::Qwen25(f) => f,
+            Self::Phi4(f) => f,
         }
     }
 }
@@ -52,6 +71,10 @@ impl SlmFormatter for SlmDynamicFormatter {
 
     fn wrap_reasoning(&self, content: &str) -> String {
         self.deref().wrap_reasoning(content)
+    }
+
+    fn reasoning_trigger(&self) -> Option<&str> {
+        self.deref().reasoning_trigger()
     }
 
     fn tool_style(&self) -> SlmToolStyle {

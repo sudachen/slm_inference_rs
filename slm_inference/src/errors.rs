@@ -34,6 +34,8 @@ pub enum TokenToStringError {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("Invalid Lstrip")]
     InvalidLstrip,
+    #[error("FfiError {0}")]
+    FfiError(#[from] FfiError),
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -64,6 +66,10 @@ pub enum InferenceError {
     ContextError(#[from] ContextError),
     #[error("Invalid Role")]
     InvalidRole,
+    #[error("Unsupported Feature")]
+    Unsupported,
+    #[error("Empty Batch")]
+    EmptyBatch,
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -86,6 +92,8 @@ pub enum BatchError {
     NtokTooLarge(usize),
     #[error("n_seq_max {0} is too large for a batch")]
     NseqTooLarge(usize),
+    #[error("Internal error {0}")]
+    InternalError(String),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -112,10 +120,10 @@ pub enum ContextError {
     Error(String),
     #[error("Ffi Error {0}")]
     FfiError(#[from] FfiError),
-    #[error("SnapshotNotFound")]
-    SnapshotNotFound,
-    #[error("SnapshotsNotSupported")]
-    SnapshotsNotSupported,
+    #[error("Position Not Found")]
+    PosNotFound,
+    #[error("Unsupported Feature")]
+    Unsupported,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]

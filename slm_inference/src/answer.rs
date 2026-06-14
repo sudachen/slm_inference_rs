@@ -1,55 +1,37 @@
 use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
+use crate::SlmFormatter;
 
-#[derive(PartialEq,Eq,Copy,Clone,Debug)]
-pub enum SlmBrake {
-    // prevent following generation and returns Complete Answer
-    Finish,
-    // prevent following generation and returns Incomplete Answer
-    Stop,
-    // puts sampled token to the batch for continuation and returns Incomplete Answer
-    // any following prompt will terminate generation
-    // is not applicable to aks_for
-    Delay,
-    Continue,
-}
-
-impl SlmBrake {
-    pub fn token_limit(max_tokens: usize) -> impl Fn(/*answer*/&str,/*last_token*/&str,/*n_tokens*/usize) -> SlmBrake {
-        move |_,_,n_tokens| match n_tokens >= max_tokens {
-            true => SlmBrake::Stop,
-            false => SlmBrake::Continue,
-        }
-    }
-
-    pub fn brake(&self) -> bool {
-        matches!(self, SlmBrake::Finish | SlmBrake::Stop | SlmBrake::Delay)
-    }
-}
-
-pub type SlmBrakeFilter = dyn Fn(/*answer*/&str,/*last_token*/&str,/*n_tokens*/usize) -> SlmBrake;
-
+#[derive(Clone,Debug)]
 pub enum SlmAnswer {
-    // (answer, fork_id)
-    Complete(String,usize),
-    Partial(String,usize),
+    // (answer, fork_id, thinking)
+    Complete(String, usize, Option<String>),
+    Partial(String, usize),
+    Incomplete(String, usize),
 }
 
 impl SlmAnswer {
     pub fn is_complete(&self) -> bool {
-        matches!(self, SlmAnswer::Complete(_,_))
+        matches!(self, SlmAnswer::Complete(_, _, _))
+    }
+    pub fn is_partial(&self) -> bool {
+        matches!(self, SlmAnswer::Partial(_, _))
     }
 
     pub fn as_str(&self) -> &str {
         match self {
-            SlmAnswer::Complete(s,_) | SlmAnswer::Partial(s,_) => s.as_str(),
+            SlmAnswer::Complete(s, _, _)
+            | SlmAnswer::Partial(s, _)
+            | SlmAnswer::Incomplete(s, _) => s.as_str(),
         }
     }
 
     pub fn fork_id(&self) -> usize {
         match self {
-            SlmAnswer::Complete(_,id) | SlmAnswer::Partial(_,id) => *id,
+            SlmAnswer::Complete(_, id, _)
+            | SlmAnswer::Partial(_, id)
+            | SlmAnswer::Incomplete(_, id) => *id,
         }
     }
 
@@ -58,8 +40,26 @@ impl SlmAnswer {
         F: FnOnce(String) -> String,
     {
         match self {
-            Self::Complete(text, fork_id) => Self::Complete(f(text), fork_id),
+            Self::Complete(text, fork_id,thought) => Self::Complete(f(text), fork_id, thought),
             Self::Partial(text, fork_id) => Self::Partial(f(text), fork_id),
+            Self::Incomplete(text, fork_id) => Self::Incomplete(f(text), fork_id),
+        }
+    }
+
+    pub fn split_thought(self, formatter: &dyn SlmFormatter) -> SlmAnswer {
+        match self {
+            Self::Complete(text,fork_id,None) => {
+                let (text, thought) = formatter.strip_thought(&text);
+                SlmAnswer::Complete(text,fork_id,thought)
+            },
+            _ => self
+        }
+    }
+
+    pub fn thought(&self)  -> Option<&str> {
+        match self {
+            Self::Complete(_,_, thought) => thought.as_deref(),
+            _ => None
         }
     }
 }
@@ -86,7 +86,9 @@ impl Borrow<str> for SlmAnswer {
 impl From<SlmAnswer> for String {
     fn from(a: SlmAnswer) -> String {
         match a {
-            SlmAnswer::Complete(s,_) | SlmAnswer::Partial(s,_) => s,
+            SlmAnswer::Complete(s, _, _)
+            | SlmAnswer::Partial(s, _)
+            | SlmAnswer::Incomplete(s, _) => s,
         }
     }
 }

@@ -28,6 +28,10 @@ impl SlmFormatter for Llama3Formatter {
         format!("<think>\n{}\n</think>\n", content.trim())
     }
 
+    fn reasoning_trigger(&self) -> Option<&str> {
+        Some("\n<think>\n")
+    }
+
     fn format_tool_call(&self, name: &str, arguments_json: &str) -> String {
         format!("{{\"name\": \"{}\", \"parameters\": {}}}", name, arguments_json.trim())
     }

@@ -11,32 +11,26 @@ use slm_inference::errors::{
 use slm_inference::{SlmPos, SlmToken, SlmContext, SlmEditLevel, SlmContextBuilder, SlmKvType};
 
 #[derive(Clone)]
-struct LlamaSamplerFree;
-impl Free<llama_cpp_sys_2::llama_sampler> for LlamaSamplerFree {
-    #[inline(never)]
-    unsafe fn free(ptr: *mut llama_cpp_sys_2::llama_sampler) {
-        unsafe { llama_cpp_sys_2::llama_sampler_free(ptr) };
-    }
-}
-
-#[derive(Clone)]
 struct LlamaContextFree;
-impl Free<llama_cpp_sys_2::llama_context> for LlamaContextFree {
+impl Free<slm_ikllama_sys::llama_context> for LlamaContextFree {
     #[inline(never)]
-    unsafe fn free(ptr: *mut llama_cpp_sys_2::llama_context) {
-        unsafe { llama_cpp_sys_2::llama_free(ptr) };
+    unsafe fn free(ptr: *mut slm_ikllama_sys::llama_context) {
+        unsafe { slm_ikllama_sys::llama_free(ptr) };
     }
 }
 
 #[derive(Clone)]
 pub struct Context {
-    vocab_ptr: *const llama_cpp_sys_2::llama_vocab,
+    vocab_ptr: *const slm_ikllama_sys::llama_vocab,
     n_batch: u32,
-    sampler: SharedPtr<llama_cpp_sys_2::llama_sampler, LlamaSamplerFree>,
-    ctx: SharedPtr<llama_cpp_sys_2::llama_context, LlamaContextFree>,
+    n_vocab: usize,
+    ctx: SharedPtr<slm_ikllama_sys::llama_context, LlamaContextFree>,
+    edit_level: SlmEditLevel,
+    temperature: f32,
+    top_k: i32,
+    top_p: f32,
     #[allow(dead_code)]
     model: Model,
-    edit_level: SlmEditLevel,
 }
 
 impl SlmContext for Context {
@@ -53,8 +47,9 @@ impl SlmContext for Context {
 
     #[inline(never)]
     fn decode(&mut self, batch: &mut Batch) -> Result<(), DecodeError> {
+
         let result =
-            unsafe { llama_cpp_sys_2::llama_decode(self.ctx.get_ptr(), batch.llama_batch) };
+            unsafe { slm_ikllama_sys::llama_decode(self.ctx.get_ptr(), batch.llama_batch) };
 
         if result != 0 {
             return Err(DecodeError::from(result));
@@ -65,19 +60,41 @@ impl SlmContext for Context {
 
     #[inline(never)]
     fn sample(&mut self, logit_idx: usize) -> Result<Option<Self::Token>, SamplingError> {
-        let token = unsafe {
-            llama_cpp_sys_2::llama_sampler_sample(
-                self.sampler.get_ptr(),
-                self.ctx.get_ptr(),
-                logit_idx as i32,
-            )
-        };
-        //let is_control = unsafe { llama_cpp_sys_2::llama_vocab_is_control(self.vocab_ptr, token) };
-        let is_eog = unsafe { llama_cpp_sys_2::llama_vocab_is_eog(self.vocab_ptr, token) };
-        if is_eog {
-            return Ok(None);
+        unsafe {
+            let ctx = self.ctx.get_ptr();
+            // TODO: validate logit_idx
+            let logits_ptr = slm_ikllama_sys::llama_get_logits_ith(ctx, logit_idx as i32);
+            let logits = std::slice::from_raw_parts(logits_ptr, self.n_vocab);
+            let mut candidates_vec: Vec<slm_ikllama_sys::llama_token_data> = (0..self.n_vocab)
+                .map(|id| slm_ikllama_sys::llama_token_data {
+                    id: id as slm_ikllama_sys::llama_token,
+                    logit: logits[id],
+                    p: 0.0,
+                })
+                .collect();
+
+            let mut candidates_array = slm_ikllama_sys::llama_token_data_array {
+                data: candidates_vec.as_mut_ptr(),
+                size: self.n_vocab,
+                selected: 0,
+                sorted: false,
+            };
+
+            let token = if self.temperature <= 0.0 {
+                slm_ikllama_sys::llama_sample_token_greedy(ctx, &mut candidates_array)
+            } else {
+                slm_ikllama_sys::llama_sample_top_k(ctx, &mut candidates_array, self.top_k, 1);
+                slm_ikllama_sys::llama_sample_top_p(ctx, &mut candidates_array, self.top_p, 1);
+                slm_ikllama_sys::llama_sample_temp(ctx, &mut candidates_array, self.temperature);
+                slm_ikllama_sys::llama_sample_token(ctx, &mut candidates_array)
+            };
+
+            if slm_ikllama_sys::llama_vocab_is_eog(self.vocab_ptr, token) {
+                Ok(None)
+            } else {
+                Ok(Some(token.into()))
+            }
         }
-        Ok(Some(token.into()))
     }
 
     #[inline(never)]
@@ -96,9 +113,9 @@ impl SlmContext for Context {
             .map_or(Ok(0), i32::try_from)
             .map_err(|_| TokenToStringError::InvalidLstrip)?;
         let size = unsafe {
-            llama_cpp_sys_2::llama_token_to_piece(
-                self.vocab_ptr,
-                token.as_i32() as llama_cpp_sys_2::llama_token,
+            slm_ikllama_sys::llama_token_to_piece(
+                self.model.get_const_ptr()?,
+                token.as_i32() as slm_ikllama_sys::llama_token,
                 buf,
                 len,
                 lstrip,
@@ -107,7 +124,7 @@ impl SlmContext for Context {
         };
 
         match size {
-            0 => Err(TokenToStringError::UnknownTokenType),
+            0 => Ok(vec![]),
             i if i.is_negative() => Err(TokenToStringError::InsufficientBufferSpace(i)),
             size => {
                 let string = unsafe { CString::from_raw(buf) };
@@ -140,11 +157,11 @@ impl SlmContext for Context {
             .map_err(|_| FfiError::CintConversionError)?;
 
         let size = unsafe {
-            llama_cpp_sys_2::llama_tokenize(
-                self.vocab_ptr,
+            slm_ikllama_sys::llama_tokenize(
+                self.model.get_const_ptr()?,
                 c_string.as_ptr(),
                 text_len,
-                buffer.as_mut_ptr().cast::<llama_cpp_sys_2::llama_token>(),
+                buffer.as_mut_ptr().cast::<slm_ikllama_sys::llama_token>(),
                 buffer_capacity,
                 add_special,
                 parse_special,
@@ -156,11 +173,11 @@ impl SlmContext for Context {
         let size = if size.is_negative() {
             buffer.reserve_exact(usize::try_from(-size).expect("usize's are larger "));
             unsafe {
-                llama_cpp_sys_2::llama_tokenize(
-                    self.vocab_ptr,
+                slm_ikllama_sys::llama_tokenize(
+                    self.model.get_const_ptr()?,
                     c_string.as_ptr(),
                     text_len,
-                    buffer.as_mut_ptr().cast::<llama_cpp_sys_2::llama_token>(),
+                    buffer.as_mut_ptr().cast::<slm_ikllama_sys::llama_token>(),
                     -size,
                     add_special,
                     parse_special,
@@ -179,23 +196,17 @@ impl SlmContext for Context {
 
     #[inline(never)]
     fn clear(&mut self) -> Result<(), ContextError> {
-        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
-        if memory.is_null() {
-            return Err(FfiError::NullPtr.into());
-        }
-        unsafe { llama_cpp_sys_2::llama_memory_clear(memory, true) };
+        let ctx = self.ctx.get_ptr();
+        unsafe { slm_ikllama_sys::llama_kv_cache_clear(ctx) };
         Ok(())
     }
 
     #[inline(never)]
     fn truncate(&mut self, pos: &SlmPos) -> Result<SlmPos, ContextError> {
-        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
-        if memory.is_null() {
-            return Err(FfiError::NullPtr.into());
-        }
         let SlmPos { token_pos, fork_id } = *pos;
+        let ctx = self.ctx.get_ptr();
         unsafe {
-            llama_cpp_sys_2::llama_memory_seq_rm(memory, fork_id as i32, token_pos as i32, -1)
+            slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, token_pos as i32, -1)
         };
         Ok(SlmPos::new(token_pos, fork_id))
     }
@@ -212,13 +223,10 @@ impl SlmContext for Context {
                 "start_pos must be before end_pos".to_string(),
             ));
         }
-        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
-        if memory.is_null() {
-            return Err(FfiError::NullPtr.into());
-        }
+        let ctx = self.ctx.get_ptr();
         unsafe {
-            llama_cpp_sys_2::llama_memory_seq_rm(
-                memory,
+            slm_ikllama_sys::llama_kv_cache_seq_rm(
+                ctx,
                 start_pos.fork_id as i32,
                 start_pos.token_pos as i32,
                 end_pos.token_pos as i32 - 1,
@@ -226,8 +234,8 @@ impl SlmContext for Context {
         }
         let pos_n = end_pos.token_pos - start_pos.token_pos;
         unsafe {
-            llama_cpp_sys_2::llama_memory_seq_add(
-                memory,
+            slm_ikllama_sys::llama_kv_cache_seq_add(
+                ctx,
                 start_pos.fork_id as i32,
                 end_pos.token_pos as i32,
                 -1,
@@ -235,17 +243,14 @@ impl SlmContext for Context {
             );
         }
         let next_pos = unsafe {
-            llama_cpp_sys_2::llama_memory_seq_pos_max(memory, start_pos.fork_id as i32) + 1
+            slm_ikllama_sys::llama_kv_cache_seq_pos_max(ctx, start_pos.fork_id as i32) + 1
         };
         Ok(SlmPos::new(next_pos as usize, start_pos.fork_id))
     }
 
     fn drop(&mut self, fork_id: usize) -> Result<(), ContextError> {
-        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
-        if memory.is_null() {
-            return Err(FfiError::NullPtr.into());
-        }
-        unsafe { llama_cpp_sys_2::llama_memory_seq_rm(memory, fork_id as i32, -1, -1) };
+        let ctx = self.ctx.get_ptr();
+        unsafe { slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, -1, -1) };
         Ok(())
     }
 
@@ -264,7 +269,7 @@ impl SlmContext for Context {
 
 pub struct Builder {
     model: Model,
-    params: llama_cpp_sys_2::llama_context_params,
+    params: slm_ikllama_sys::llama_context_params,
     temperature: f32,
     top_k: i32,
     top_p: f32,
@@ -272,51 +277,62 @@ pub struct Builder {
 
 #[repr(u32)]
 #[allow(dead_code)]
+#[derive(Debug,Copy,Clone,PartialEq,Eq)]
 pub enum KVType {
-    Q4_0 = llama_cpp_sys_2::GGML_TYPE_Q4_0,
-    Q5_0 = llama_cpp_sys_2::GGML_TYPE_Q5_0,
-    Q8_0 = llama_cpp_sys_2::GGML_TYPE_Q8_0,
-    F16 = llama_cpp_sys_2::GGML_TYPE_F16,
-    F32 = llama_cpp_sys_2::GGML_TYPE_F32,
+    Q4_0 = slm_ikllama_sys::GGML_TYPE_Q4_0,
+    Q5_0 = slm_ikllama_sys::GGML_TYPE_Q5_0,
+    Q6_0 = slm_ikllama_sys::GGML_TYPE_Q6_0,
+    Q8_0 = slm_ikllama_sys::GGML_TYPE_Q8_0,
+    F16 = slm_ikllama_sys::GGML_TYPE_F16,
+    F32 = slm_ikllama_sys::GGML_TYPE_F32,
 }
 
 impl KVType {
-    pub fn from(t: SlmKvType) -> Option<KVType> {
+    pub fn from(t: SlmKvType) -> Option<(KVType,bool)> {
         match t {
-            SlmKvType::Q4 => Some(KVType::Q4_0),
-            SlmKvType::Q5 => Some(KVType::Q5_0),
-            SlmKvType::Q6 => Some(KVType::Q8_0),
-            SlmKvType::Q8 => Some(KVType::Q8_0),
-            SlmKvType::RawQ8 => Some(KVType::Q8_0),
-            SlmKvType::F16 => Some(KVType::F16),
-            SlmKvType::F32 => Some(KVType::F32),
+            SlmKvType::Q4 => Some((KVType::Q4_0,true)),
+            SlmKvType::Q5 => Some((KVType::Q5_0,true)),
+            SlmKvType::Q6 => Some((KVType::Q6_0,true)),
+            SlmKvType::Q8 => Some((KVType::Q8_0,true)),
+            SlmKvType::RawQ8 => Some((KVType::Q8_0,false)),
+            SlmKvType::F16 => Some((KVType::F16,false)),
+            SlmKvType::F32 => Some((KVType::F32,false)),
         }
     }
 }
-
 impl Builder {
     #[inline(never)]
     pub fn new(model: Model) -> Self {
-        let mut params= unsafe { llama_cpp_sys_2::llama_context_default_params() };
-        params.flash_attn_type = llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_ENABLED;
         Self {
             model,
-            params,
+            params: unsafe { slm_ikllama_sys::llama_context_default_params() },
             temperature: 0.0,
             top_k: 0,
             top_p: 0.0,
         }
     }
-
     #[allow(dead_code)]
     pub fn with_flash_attn(mut self) -> Self {
-        self.params.flash_attn_type = llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_ENABLED;
+        self.params.flash_attn = true;
         self
     }
 
     #[allow(dead_code)]
+    pub fn with_kv_hadamard(mut self, k: bool, v: bool) -> Self {
+        self.params.flash_attn = true;
+        self.params.k_cache_hadamard = k;
+        self.params.v_cache_hadamard = v;
+        self
+    }
+    #[allow(dead_code)]
     pub fn with_type_kv(mut self, type_k: KVType, type_v: KVType) -> Self {
-        self.params.flash_attn_type = llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_ENABLED;
+        self.params.flash_attn = true;
+        if type_k == KVType::Q4_0 || type_k == KVType::Q5_0 {
+            self.params.k_cache_hadamard = true;
+        }
+        if type_k == KVType::Q4_0 || type_k == KVType::Q5_0 {
+            self.params.v_cache_hadamard = true;
+        }
         self.params.type_k = type_k as u32;
         self.params.type_v = type_v as u32;
         self
@@ -324,57 +340,15 @@ impl Builder {
 }
 
 impl SlmContextBuilder<Context> for Builder {
-    #[allow(dead_code)]
-    fn with_n_ctx(mut self, n_ctx: usize) -> Self {
-        self.params.n_ctx = n_ctx as u32;
-        self
-    }
-
-    #[allow(dead_code)]
-    fn with_n_batch(mut self, n_batch: usize) -> Self {
-        self.params.n_batch = n_batch as u32;
-        self
-    }
-
-    #[inline(never)]
-    fn with_gen_type_kv(self, type_k: SlmKvType, type_v: SlmKvType) -> Self {
-        let type_k = KVType::from(type_k).unwrap_or(KVType::Q8_0);
-        let type_v = KVType::from(type_v).unwrap_or(KVType::Q8_0);
-        self.with_type_kv(type_k, type_v)
-    }
-
     #[inline(never)]
     fn build(mut self) -> Result<Context, ContextBuilderError> {
         let ctx =
-            unsafe { llama_cpp_sys_2::llama_init_from_model(self.model.get_ptr()?, self.params) };
+            unsafe { slm_ikllama_sys::llama_init_from_model(self.model.get_ptr()?, self.params) };
 
         let model_ptr = self.model.get_const_ptr()?;
-        let vocab_ptr = unsafe { llama_cpp_sys_2::llama_model_get_vocab(model_ptr) };
-        let sampler = unsafe {
-            let sampler = llama_cpp_sys_2::llama_sampler_chain_init(
-                llama_cpp_sys_2::llama_sampler_chain_default_params(),
-            );
-            if self.temperature <= 0.0 {
-                llama_cpp_sys_2::llama_sampler_chain_add(
-                    sampler,
-                    llama_cpp_sys_2::llama_sampler_init_greedy(),
-                );
-            } else {
-                llama_cpp_sys_2::llama_sampler_chain_add(
-                    sampler,
-                    llama_cpp_sys_2::llama_sampler_init_top_k(self.top_k),
-                );
-                llama_cpp_sys_2::llama_sampler_chain_add(
-                    sampler,
-                    llama_cpp_sys_2::llama_sampler_init_top_p(self.top_p, 1),
-                );
-                llama_cpp_sys_2::llama_sampler_chain_add(
-                    sampler,
-                    llama_cpp_sys_2::llama_sampler_init_temp(self.temperature),
-                );
-            }
-            SharedPtr::new(sampler)
-        };
+        let vocab_ptr = unsafe { slm_ikllama_sys::llama_model_get_vocab(model_ptr) };
+        let n_vocab = unsafe { slm_ikllama_sys::llama_n_vocab(model_ptr) } as usize;
+
 
         // TODO: decide by arch from model metadata
         let edit_level = SlmEditLevel::Cut;
@@ -383,16 +357,43 @@ impl SlmContextBuilder<Context> for Builder {
             ctx: SharedPtr::new(ctx),
             vocab_ptr,
             n_batch: self.params.n_batch,
-            model: self.model,
-            sampler,
+            n_vocab,
             edit_level,
+            temperature: self.temperature,
+            top_k: self.top_k,
+            top_p: self.top_p,
+            model: self.model,
         })
     }
 
+    #[inline(never)]
     fn with_sampler(mut self, temperature: f32, top_k: i32, top_p: f32) -> Self {
         self.temperature = temperature;
         self.top_k = top_k;
         self.top_p = top_p;
+        self
+    }
+
+    #[inline(never)]
+    fn with_n_ctx(mut self, n_ctx: usize) -> Self {
+        self.params.n_ctx = n_ctx as u32;
+        self
+    }
+
+    #[inline(never)]
+    fn with_n_batch(mut self, n_batch: usize) -> Self {
+        self.params.n_batch = n_batch as u32;
+        self
+    }
+
+    #[inline(never)]
+    fn with_gen_type_kv(mut self, k: SlmKvType, v: SlmKvType) -> Self {
+        let (k,kh) = KVType::from(k).unwrap();
+        let (v,vh) = KVType::from(v).unwrap();
+        self.params.type_k = k as u32;
+        self.params.k_cache_hadamard = kh;
+        self.params.type_v = v as u32;
+        self.params.v_cache_hadamard = vh;
         self
     }
 

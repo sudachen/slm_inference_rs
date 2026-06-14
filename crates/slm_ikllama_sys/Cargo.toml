@@ -3,4 +3,40 @@ name = "slm_ikllama_sys"
 version = "0.1.0"
 edition = "2024"
 
+
+include = [
+    "wrapper.h",
+    "wrapper.cpp",
+    "build.rs",
+    "src",
+    "ik_llama.cpp/common/cmake",
+    "ik_llama.cpp/common/**/*.h*",
+    "ik_llama.cpp/common/**/*.c*",
+    "ik_llama.cpp/common/**/CMakeLists.txt",
+    "ik_llama.cpp/ggml/**/*.h",
+    "ik_llama.cpp/ggml/**/*.c*",
+    "ik_llama.cpp/ggml/**/*.m*",
+    "ik_llama.cpp/ggml/**/CMakeLists.txt",
+    "ik_llama.cpp/src/**/*.h*",
+    "ik_llama.cpp/src/**/*.c*",
+    "ik_llama.cpp/src/**/CMakeLists.txt",
+    "ik_llama.cpp/include/**/*.h*",
+    "ik_llama.cpp/pocs",
+    "ik_llama.cpp/vendor",
+]
+
 [dependencies]
+
+
+[build-dependencies]
+bindgen = { workspace = true }
+cmake = { workspace = true }
+glob = { workspace= true }
+walkdir = { workspace= true }
+cc = { workspace = true }
+find_cuda_helper = { workspace = true }
+
+[features]
+cuda = []
+native = []
+default = ["cuda","native"]

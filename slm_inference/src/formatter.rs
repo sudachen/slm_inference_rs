@@ -22,6 +22,8 @@ pub trait SlmFormatter {
     /// (for example, restoring context from a database)
     fn wrap_reasoning(&self, content: &str) -> String;
 
+    fn reasoning_trigger(&self) -> Option<&str>;
+
     // --- Tool Control ---
 
     /// Which strategy the model uses for working with tools
@@ -42,7 +44,7 @@ pub trait SlmFormatter {
         if let Some((start, end)) = self.reasoning_bounds() {
             while let Some(start_idx) = cleaned.find(start) {
                 if let Some(end_idx) = cleaned[start_idx..].find(end) {
-                    let absolute_end_idx = start_idx + end_idx + end.len();
+                    let absolute_end_idx = start_idx + end_idx;
                     cleaned.drain(start_idx..absolute_end_idx);
                 } else {
                     cleaned.drain(start_idx..);
@@ -51,6 +53,27 @@ pub trait SlmFormatter {
             }
         }
         self.strip_tags(&cleaned).trim().to_string()
+    }
+
+    fn strip_thought(&self, text: &str) -> (String, Option<String>) {
+        let mut cleaned = text.to_string();
+        let mut thinking = String::new();
+        let mut idx = 0;
+        if let Some((start, end)) = self.reasoning_bounds() {
+            while let Some(start_idx) = cleaned[idx..].find(start) {
+                idx += start_idx;
+                cleaned.drain(idx..idx + start.len());
+                if let Some(end_idx) = cleaned[idx..].find(end) {
+                    thinking.extend(cleaned.drain(idx..idx + end_idx));
+                    cleaned.drain(idx..idx + end.len());
+                } else {
+                    thinking.extend(cleaned.drain(idx..));
+                    break;
+                }
+            }
+        }
+        let thinking = if thinking.is_empty() { None } else { Some(thinking) };
+        (self.strip_tags(&cleaned).trim().to_string(), thinking)
     }
 }
 
