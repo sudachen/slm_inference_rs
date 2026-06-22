@@ -2,7 +2,8 @@
 
 A Rust workspace for running small language models (SLMs) locally via GGUF backends.
 Provides an abstract trait layer over different llama.cpp-derived runtimes, a chat-template
-formatting system, and a high-level conversational oracle API with built-in chain-of-thought support.
+formatting system, and a high-level conversational oracle API with built-in chain-of-thought
+and structured JSON output support.
 
 ## Workspace layout
 
@@ -16,7 +17,8 @@ slm_inference_rs/
 │   ├── epubscan/           # EPUB reader utility
 │   └── fb2scan/            # FB2 reader utility
 └── examples/
-    └── lore_extractor/     # Example: entity extraction from books
+    ├── backend/            # Shared helper: model/backend selection for examples
+    └── lore_extractor/     # Example: entity extraction and Q&A from books
 ```
 
 ## Crates
@@ -31,26 +33,60 @@ workspace builds on. No runtime dependencies — backends are chosen by the cons
 | Item | Description |
 |---|---|
 | `SlmOracle` | High-level conversational interface |
+| `SlmJsonOracle` | Extension of `SlmOracle` for structured JSON generation |
 | `SlmSimpleOracle<I, F>` | Standard `SlmOracle` implementation |
+| `SlmOracleState` | Snapshot returned by `save()` for context branching |
 | `SlmFormatter` | Chat-template trait (BOS, turn delimiters, tool calling, reasoning bounds) |
 | `SlmDynamicFormatter` | Runtime formatter selected by name string |
 | `SlmAnswer` | Typed response; carries optional chain-of-thought `.thought()` |
 | `SlmContext` | Low-level KV-cache / decode / sample interface |
+| `SlmContextBuilder` | Builder for configuring and instantiating an `SlmContext` |
+| `SlmKvType` | KV-cache quantization format (Q4, Q5, Q6, Q8, F16, F32, …) |
 | `SlmInference` / `SlmSimpleInference` | Autoregressive token-generation loop |
-| `SlmBrake` | Early-stop callback (e.g. token limit, custom stop condition) |
+| `SlmAction` / `SlmBoxedAction` | Generation control callbacks (token limit, streaming, …) |
+| `SlmConstraint` | Token-level filter for constrained decoding (e.g. JSON grammar) |
+| `SlmEditLevel` | Declares which KV-cache editing operations a backend supports |
 | `SlmHfModel` | Hugging Face model descriptor (repo, filename, formatter name) |
 
-**`SlmOracle` convenience methods:**
+**`SlmOracle` quick example:**
 
 ```rust
 oracle.system("You are a helpful assistant.")?;
 oracle.user("Some context...")?;
 
-let answer = oracle.ask("What is X?", None)?;          // plain generation
-let answer = oracle.think("Reason about X", None)?;    // chain-of-thought
+let answer = oracle.ask(false, "What is X?", None)?;   // plain generation
+let answer = oracle.ask(true,  "Reason about X", None)?; // chain-of-thought
 
-println!("{}", answer);                                 // final answer
-println!("{:?}", answer.thought());                     // reasoning trace
+println!("{}", answer);                                  // final answer
+println!("{:?}", answer.thought());                      // reasoning trace
+```
+
+**`SlmOracle` methods:**
+
+| Method | Retains context? | Description |
+|---|---|---|
+| `system(text)` | ✓ | Prefill a system turn |
+| `user(text)` | ✓ | Prefill a user turn without generating |
+| `assistant(text)` | ✓ | Prefill an assistant turn (history injection) |
+| `ask(think, text, action)` | ✗ | Generate a reply; context rolls back after |
+| `turn(text, think, action)` | ✓ | Generate a reply; exchange kept in context |
+| `generate(role, text, think, reset, action, constraint)` | configurable | Low-level entry point |
+| `save()` → `SlmOracleState` | — | Snapshot current turn position |
+| `rollback(state)` | — | Restore to a previous snapshot |
+| `clear()` | — | Reset context and turn state |
+| `set_max_answer_tokens(n)` | — | Override the per-call token budget (default 1 024) |
+
+**`SlmJsonOracle::json_ask` — structured JSON extraction:**
+
+```rust
+#[derive(Deserialize, schemars::JsonSchema)]
+struct EntityCard { term: String, category: String, clue: String }
+
+let cards: Vec<EntityCard> = oracle.json_ask(
+    false,
+    "Extract all named entities.",
+    Some(SlmAction::print_token()),
+)?;
 ```
 
 **Supported chat templates (`SlmDynamicFormatter`):**
@@ -121,36 +157,65 @@ FB2 book format reader, analogous to `epubscan`.
 
 ---
 
+## Example: `backend`
+
+A shared library crate (`examples/backend`) used by all example binaries. Provides:
+
+- `selector(model, backend, cpu)` — instantiates the requested model on the requested backend and returns a `Box<dyn SlmOracle>`
+- `select_model(model_id)` — maps a `ModelId` variant to an `SlmHfModel` descriptor
+- `ModelId` / `BackendId` — `clap`-compatible enums for CLI argument parsing
+
+**Supported models (`ModelId`):**
+
+| Variant | Repo | File |
+|---|---|---|
+| `gemma4eb` | `unsloth/gemma-4-E4B-it-GGUF` | `gemma-4-E4B-it-IQ4_XS.gguf` |
+| `gemma12b` *(default)* | `unsloth/gemma-4-12B-it-qat-GGUF` | `gemma-4-12B-it-qat-UD-Q4_K_XL.gguf` |
+| `phi4` | `bartowski/microsoft_Phi-4-mini-reasoning-GGUF` | `microsoft_Phi-4-mini-reasoning-IQ4_XS.gguf` |
+| `qwen25` | `bartowski/Qwen2.5-7B-Instruct-GGUF` | `Qwen2.5-7B-Instruct-IQ4_XS.gguf` |
+
+**Cargo features:**
+
+| Feature | Backend enabled |
+|---|---|
+| `ikllama` *(default)* | `slm_ikllama` with CUDA + native |
+| `llama` | `slm_llama` with Vulkan |
+
+---
+
 ## Example: `lore_extractor`
 
-A command-line tool that reads EPUB books and runs structured Yes/No questions against them
-using a language model — useful for automated lore/entity extraction and fact verification.
+A command-line tool that reads EPUB books and applies language-model analysis — Yes/No
+fact-checking and structured entity extraction.
 
 **Subcommands:**
 
 - `say-hi` — sanity check: loads the model and asks it to say "Hi"
 - `yes-no` — reads EPUB sections into the context, then answers a set of Yes/No questions
   from a JSON file; supports optional chain-of-thought via `--think`
+- `ents` — reads EPUB sections and extracts named entities (characters, locations,
+  organizations, neologisms) as structured JSON using `SlmJsonOracle::json_ask`
 
-**Supported models (`--model`):**
+**CLI flags (global):**
 
-| Value | Model |
+| Flag | Description |
 |---|---|
-| `gemma4eb` *(default)* | `unsloth/gemma-4-E4B-it-GGUF` (IQ4\_XS) |
-| `gemma12b` | `unsloth/gemma-4-12B-it-qat-GGUF` (UD-Q4\_K\_XL) |
-| `phi4` | `unsloth/Phi-4-mini-reasoning-GGUF` (Q4\_K\_M) |
-| `qwen25` | `bartowski/Qwen2.5-7B-Instruct-GGUF` (IQ4\_XS) |
-
-**Supported backends (`--backend`):** `llama`, `ikllama`
+| `--model` | Model to use (see `ModelId` variants above; default `gemma12b`) |
+| `--backend` | Backend to use (`llama`, `ikllama`; default `ikllama`) |
+| `--cpu` | Disable GPU offloading (sets `n_gpu_layers = 0`) |
 
 Models are downloaded automatically from Hugging Face Hub on first run.
 
 ```
 cargo run -p lore_extractor -- yes-no \
-    --model gemma4eb --backend ikllama \
+    --model gemma12b --backend ikllama \
     --think \
     --input book.epub \
     --questions yesno.json
+
+cargo run -p lore_extractor -- ents \
+    --model gemma12b --backend ikllama \
+    book.epub
 ```
 
 ## License
