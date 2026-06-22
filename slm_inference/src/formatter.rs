@@ -1,14 +1,31 @@
 use crate::SlmRole;
 
+/// Describes how a model interleaves tool calls and tool responses within a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlmToolStyle {
+    /// Tool calls and responses are embedded as special markup blocks *inside* the
+    /// current assistant or user turn (e.g. Gemma 4, Mistral, Qwen 2.5).
     Inline,
+    /// Tool calls and responses occupy their own dedicated conversation turns
+    /// (e.g. Llama 3 `ipython` role).
     SeparateTurn,
 }
 
+/// Chat-template renderer for a specific model family.
+///
+/// Each model family wraps messages in its own delimiter scheme (ChatML, Llama 3
+/// header tokens, Mistral `[INST]`, etc.).  Implementing this trait allows
+/// [`SlmSimpleOracle`](crate::SlmSimpleOracle) to stay model-agnostic.
+///
+/// See [`SlmDynamicFormatter`](crate::SlmDynamicFormatter) for a runtime-selectable
+/// dispatcher over the built-in formatters.
 pub trait SlmFormatter {
+    /// Optional byte-order mark / BOS token prepended before the very first turn.
+    /// Returns `None` for models that start directly with the first role delimiter.
     fn bos(&self) -> Option<&str>;
+    /// Returns the opening delimiter for a turn with the given role.
     fn turn_start(&self, role: &SlmRole) -> String;
+    /// Returns the closing delimiter for a turn with the given role.
     fn turn_end(&self, role: &SlmRole) -> String;
 
     // --- Reasoning Control ---
@@ -37,8 +54,10 @@ pub trait SlmFormatter {
     /// for SeparateTurn — a full body inside turn_start(Tool) and turn_end(Tool).
     fn format_tool_response(&self, tool_name: &str, content: &str) -> String;
 
+    /// Strip all model-specific markup tags from `text`, leaving only content.
     fn strip_tags(&self, text: &str) -> String;
 
+    /// Remove reasoning blocks and all markup tags from `text`, returning clean content.
     fn clean(&self, text: &str) -> String {
         let mut cleaned = text.to_string();
         if let Some((start, end)) = self.reasoning_bounds() {
@@ -55,6 +74,8 @@ pub trait SlmFormatter {
         self.strip_tags(&cleaned).trim().to_string()
     }
 
+    /// Split `text` into `(clean_content, Option<thinking>)` by extracting any
+    /// reasoning block demarcated by [`reasoning_bounds`](Self::reasoning_bounds).
     fn strip_thought(&self, text: &str) -> (String, Option<String>) {
         let mut cleaned = text.to_string();
         let mut thinking = String::new();

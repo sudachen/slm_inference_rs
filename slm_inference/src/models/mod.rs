@@ -14,6 +14,21 @@ use crate::errors::ModelFormatterError;
 use crate::formatter::SlmToolStyle;
 use crate::{SlmFormatter, SlmRole};
 
+/// Runtime-selectable chat-template formatter that dispatches to one of the
+/// built-in model-family formatters.
+///
+/// Construct via `TryFrom<&str>` using the formatter name keys below:
+///
+/// | Key | Formatter | Notes |
+/// |-----|-----------|-------|
+/// | `"llama3"` | [`Llama3Formatter`] | Meta Llama 3 header-token style |
+/// | `"gemma4"` | [`GemmaFormatter`] (Vanilla) | Google Gemma 4 turn/channel style |
+/// | `"gemma4-google"` | [`GemmaFormatter`] (GoogleOfficial) | Official Google template |
+/// | `"gemma4-unsloth"` | [`GemmaFormatter`] (UnslothFixed) | Unsloth-patched template |
+/// | `"mistral"` | [`MistralFormatter`] (V3Tekken) | Mistral v3 / Tekken tokenizer |
+/// | `"mistral-legacy"` | [`MistralFormatter`] (Legacy) | Mistral v1/v2 legacy template |
+/// | `"qwen25"` | [`Qwen25Formatter`] | Qwen 2.5 ChatML style |
+/// | `"phi4"` | [`Phi4Formatter`] | Microsoft Phi-4 style |
 pub enum SlmDynamicFormatter {
     Gemma(GemmaFormatter),
     Llama3(Llama3Formatter),

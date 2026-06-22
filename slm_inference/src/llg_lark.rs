@@ -8,11 +8,18 @@ use serde_json::Value;
 use crate::errors::{InferenceError, SamplingError};
 use crate::{SlmConstraint, SlmConstraintStep};
 
+/// A minimal [`TokenizerEnv`] implementation backed by a [`TokTrie`].
+///
+/// Used to bridge the crate's own vocabulary representation with the
+/// `llguidance` constrained-decoding library when a full HuggingFace tokenizer
+/// is not available.  Tokenization falls back to greedy trie matching.
 pub struct SlmSimpleTokEnv {
     trie: TokTrie,
 }
 
 impl SlmSimpleTokEnv {
+    /// Build a `SlmSimpleTokEnv` from a vocabulary described as a flat list of byte
+    /// sequences, one per token ID.  `tok_eos` is the end-of-sequence token ID.
     pub fn new(tok_eos: u32, words: &[Vec<u8>]) -> Self {
         let rx_info = TokRxInfo {
             vocab_size: words.len() as u32,
@@ -42,12 +49,17 @@ impl TokenizerEnv for SlmSimpleTokEnv {
     }
 }
 
+/// An [`SlmConstraint`] that enforces a Lark grammar during token sampling.
+///
+/// Wraps a `llguidance` [`Constraint`] compiled from a [`TopLevelGrammar`].
+/// Logit masking is performed by the underlying `Constraint::compute_mask` call.
 pub struct LarkConstraint {
     constraint: Constraint,
     tokenv: TokEnv,
 }
 
 impl LarkConstraint {
+    /// Wrap a compiled [`TokenParser`] in a `LarkConstraint`.
     pub fn new(parser: TokenParser) -> Self {
         let tokenv = parser.token_env.clone();
         Self {
@@ -166,6 +178,11 @@ pub fn json_schema_to_lark(schema: Value, reasoning_bounds: Option<(&str,&str)>)
     Ok(lark_rules.join("\n"))
 }
 
+/// Cache of compiled `llguidance` parsers, keyed by the Rust [`TypeId`] of the
+/// target schema type.
+///
+/// The [`ParserFactory`] is initialised lazily on the first call to
+/// [`parser`](Self::parser) that requires compilation.
 pub struct ParserRegistry {
     tok_env: TokEnv,
     factory: Option<ParserFactory>,
@@ -174,6 +191,7 @@ pub struct ParserRegistry {
 }
 
 impl ParserRegistry {
+    /// Create a new empty registry using `tk` as the shared token environment.
     pub fn new(tk: &TokEnv) -> Self {
         let canonical = tk.tokenize_is_canonical();
         Self {
@@ -189,6 +207,7 @@ impl ParserRegistry {
         }
     }
 
+    /// Return the [`ParserFactory`], initialising it the first time this is called.
     pub fn factory(&mut self) -> Result<&ParserFactory, InferenceError> {
         if self.factory.is_none() {
             self.factory = Some(
@@ -199,6 +218,11 @@ impl ParserRegistry {
         Ok(self.factory.as_ref().unwrap())
     }
 
+    /// Look up or compile a [`TokenParser`] for `type_id`.
+    ///
+    /// If `grammar` is `Some` and no parser for `type_id` is cached yet, one is
+    /// compiled from the grammar and stored.  Returns `None` when `grammar` is
+    /// `None` and no cached entry exists.
     pub fn parser(
         &mut self,
         type_id: TypeId,

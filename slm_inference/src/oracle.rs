@@ -1,11 +1,16 @@
 use crate::errors::{InferenceError, SamplingError};
-use crate::{SlmAnswer, SlmBoxedBrakeFn, SlmConstraint, SlmConstraintStep, SlmPos, SlmRole};
+use crate::{SlmAnswer, SlmBoxedAction, SlmConstraint, SlmConstraintStep, SlmPos, SlmRole};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::any::TypeId;
 
+/// Default upper bound on generated tokens per `generate` / `ask` call.
 pub(crate) const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
 
+/// A snapshot of the oracle's conversation state at a given point in time.
+///
+/// Returned by [`SlmOracle::save`] and consumed by [`SlmOracle::rollback`]
+/// to restore the context to an earlier turn boundary.
 pub struct SlmOracleState {
     pub(crate) pos: SlmPos,
     pub(crate) role: Option<SlmRole>,
@@ -34,7 +39,7 @@ pub trait SlmOracle {
     /// - `role` — must be [`SlmRole::User`] or [`SlmRole::Tool`].
     /// - `think` — when `true`, the reasoning trigger prefix is injected to
     ///   activate chain-of-thought (requires a compatible formatter).
-    /// - `brake` — optional early-stop callback; combined with the default
+    /// - `action` — optional early-stop callback; combined with the default
     ///   token-limit brake.
     fn generate(
         &mut self,
@@ -42,7 +47,7 @@ pub trait SlmOracle {
         text: &str,
         think: bool,
         reset: bool,
-        brake: Option<SlmBoxedBrakeFn>,
+        action: Option<SlmBoxedAction>,
         constraint: Option<&mut dyn SlmConstraint>,
     ) -> Result<SlmAnswer, InferenceError>;
 
@@ -64,19 +69,30 @@ pub trait SlmOracle {
 
     /// Generate an answer to `text` without retaining the exchange in the context.
     /// Equivalent to `generate(User, text, think=false, brake)`.
-    fn ask(&mut self, think: bool, text: &str) -> Result<SlmAnswer, InferenceError> {
-        self.generate(&SlmRole::User, text, think, true, None, None)
+    fn ask(&mut self, think: bool, text: &str, action: Option<SlmBoxedAction>) -> Result<SlmAnswer, InferenceError> {
+        self.generate(&SlmRole::User, text, think, true, action, None)
     }
 
-    fn turn(&mut self, text: &str, think: bool) -> Result<SlmAnswer, InferenceError> {
-        self.generate(&SlmRole::User, text, think, false, None, None)
+    /// Append a user turn and generate a response, *retaining* the exchange in the
+    /// context (unlike [`ask`](Self::ask) which discards it).
+    fn turn(&mut self, text: &str, think: bool, action: Option<SlmBoxedAction>) -> Result<SlmAnswer, InferenceError> {
+        self.generate(&SlmRole::User, text, think, false, action, None)
     }
 
+    /// Roll the conversation back to a previously saved state.
     fn rollback(&mut self, state: &SlmOracleState) -> Result<(), InferenceError>;
+    /// Save the current conversation state so it can be restored later.
     fn save(&mut self) -> Result<SlmOracleState, InferenceError>;
+    /// Returns the number of tokens currently in the context.
     fn tokens_n(&self) -> usize;
+    /// Override the per-call token generation limit (default: [`DEFAULT_MAX_ANSWER_TOKENS`]).
     fn set_max_answer_tokens(&mut self, max_answer_tokens: usize);
 
+    /// Build a [`SlmConstraint`] that enforces the JSON schema of type `T`.
+    ///
+    /// The default implementation returns an [`Unconstrained`] no-op constraint.
+    /// [`SlmSimpleOracle`](crate::SlmSimpleOracle) overrides this with a real
+    /// Lark-grammar constraint backed by `llguidance`.
     fn json_constraint(
         &mut self,
         _type_id: TypeId,
@@ -86,12 +102,19 @@ pub trait SlmOracle {
     }
 }
 
+/// Extension of [`SlmOracle`] that generates structured JSON output validated against
+/// the compile-time schema of a `serde`/`schemars` type `T`.
+///
+/// Blanket-implemented for every `SlmOracle`, delegating constraint construction
+/// to [`SlmOracle::json_constraint`].
 pub trait SlmJsonOracle {
+    /// Ask the model a question and parse the response as `Vec<T>`, enforcing the
+    /// JSON schema of `T` via constrained decoding.
     fn json_ask<T: DeserializeOwned + JsonSchema + 'static>(
         &mut self,
         think: bool,
         text: &str,
-        braker: Option<SlmBoxedBrakeFn>
+        action: Option<SlmBoxedAction>
     ) -> Result<Vec<T>, InferenceError>;
 }
 
@@ -100,7 +123,7 @@ impl<Oracle: SlmOracle + ?Sized> SlmJsonOracle for Oracle {
         &mut self,
         think: bool,
         text: &str,
-        braker: Option<SlmBoxedBrakeFn>
+        action: Option<SlmBoxedAction>
     ) -> Result<Vec<T>, InferenceError> {
         let mut constraint = self.json_constraint(TypeId::of::<T>(), &|| {
             let schema = schemars::schema_for!(T);
@@ -112,7 +135,7 @@ impl<Oracle: SlmOracle + ?Sized> SlmJsonOracle for Oracle {
             text,
             think,
             true,
-            braker,
+            action,
             Some(constraint.as_mut()),
         )?;
 
@@ -121,6 +144,9 @@ impl<Oracle: SlmOracle + ?Sized> SlmJsonOracle for Oracle {
     }
 }
 
+/// A no-op [`SlmConstraint`] that places no restrictions on generated tokens.
+///
+/// Used as the default when no grammar or schema constraint is provided.
 pub struct Unconstrained;
 impl SlmConstraint for Unconstrained {
     fn mask(&mut self, _logits: &mut [f32]) -> Result<bool, SamplingError> {

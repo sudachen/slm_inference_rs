@@ -1,14 +1,25 @@
 use crate::SlmRole;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 
+/// [`SlmFormatter`] for Google Gemma 4 models.
+///
+/// Uses Gemma's `<|turn>` / `<turn|>` turn delimiters and `<|channel>thought` /
+/// `<channel|>` reasoning tags.  The exact format varies by [`Gemma4Flavor`].
 pub struct GemmaFormatter {
     flavor: Gemma4Flavor,
     thinking: bool,
 }
 
+/// Selects the exact Gemma 4 chat-template variant to use.
+///
+/// Different fine-tuned releases of Gemma 4 use slightly different token sequences
+/// for tool calls, necessitating per-flavor formatting.
 pub enum Gemma4Flavor {
+    /// Official Google template as shipped with the base Gemma 4 checkpoint.
     GoogleOfficial,
+    /// Template used by Unsloth fine-tunes with a corrected tool-call format.
     UnslothFixed,
+    /// Simplified vanilla format suitable for most community fine-tunes.
     Vanilla,
 }
 

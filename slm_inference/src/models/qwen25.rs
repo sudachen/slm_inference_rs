@@ -1,6 +1,11 @@
 use crate::SlmRole;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 
+/// [`SlmFormatter`] for Qwen 2.5 models (including QwQ and DeepSeek-R1-Distill-Qwen).
+///
+/// Uses the ChatML convention with `im_start` / `im_end` markers and a dedicated
+/// `tool` role for tool responses.  There is no explicit BOS token.  Reasoning
+/// blocks use `<think>` / `</think>` tags.
 pub struct Qwen25Formatter {
     thinking: bool,
 }

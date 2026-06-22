@@ -1,11 +1,14 @@
 use crate::errors::InferenceError;
 use crate::formatter::SlmToolStyle;
-use crate::oracle::{SlmOracleState};
-use crate::{SlmAnswer, SlmBoxedBrakeFn, SlmBrake, SlmConstraint, SlmContext, SlmFormatter, SlmInference, SlmOracle, SlmRole, SlmSimpleInference};
-use llguidance::api::TopLevelGrammar;
+use crate::llg_lark::{LarkConstraint, ParserRegistry, json_schema_to_lark};
+use crate::oracle::SlmOracleState;
+use crate::{
+    SlmAction, SlmAnswer, SlmBoxedAction, SlmConstraint, SlmContext, SlmFormatter, SlmInference,
+    SlmOracle, SlmRole, SlmSimpleInference,
+};
 use llguidance::TokenParser;
+use llguidance::api::TopLevelGrammar;
 use std::any::TypeId;
-use crate::llg_lark::{json_schema_to_lark, LarkConstraint, ParserRegistry};
 
 /// Standard [`SlmOracle`] implementation backed by any [`SlmInference`] engine
 /// and any [`SlmFormatter`].
@@ -122,6 +125,11 @@ impl<I: SlmInference, F: SlmFormatter> SlmSimpleOracle<I, F> {
         Ok(())
     }
 
+    /// Look up or create a [`TokenParser`] for the given type.
+    ///
+    /// If a grammar is provided and no parser for `type_id` exists yet, a new one
+    /// is compiled via [`ParserRegistry`] and cached.  Returns `None` if `grammar`
+    /// is `None` and no cached parser exists.
     fn parser(
         &mut self,
         type_id: TypeId,
@@ -132,7 +140,6 @@ impl<I: SlmInference, F: SlmFormatter> SlmSimpleOracle<I, F> {
             .get_or_insert_with(|| ParserRegistry::new(&self.inference.tok_env()));
         q.parser(type_id, grammar)
     }
-
 }
 
 impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
@@ -148,7 +155,7 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
         text: &str,
         think: bool,
         reset: bool,
-        brake: Option<SlmBoxedBrakeFn>,
+        action: Option<SlmBoxedAction>,
         mut constraint: Option<&mut dyn SlmConstraint>,
     ) -> Result<SlmAnswer, InferenceError> {
         let mut fragment = String::new();
@@ -165,7 +172,7 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
             self.active_turn = Some(SlmRole::Assistant);
         }
 
-        if think && let Some(trigger) = self.formatter.reasoning_trigger(){
+        if think && let Some(trigger) = self.formatter.reasoning_trigger() {
             fragment.push_str(trigger);
             if let Some(tk) = constraint.as_deref_mut() {
                 tk.prefill(trigger)?;
@@ -179,7 +186,7 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
 
         self.inference.prefill(&fragment)?;
         let mut answer = self.inference.generate_until(
-            &mut [brake, Some(SlmBrake::token_limit(self.max_answer_tokens))],
+            &mut [action, Some(SlmAction::token_limit(self.max_answer_tokens))],
             constraint,
         )?;
 
@@ -223,13 +230,25 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
         self.max_answer_tokens = max_answer_tokens;
     }
 
-    fn json_constraint(&mut self, type_id: TypeId,
-                       json_schema: &dyn Fn() -> Result<serde_json::Value, InferenceError>) -> Result<Box<dyn SlmConstraint>, InferenceError> {
+    /// Build a [`LarkConstraint`] that enforces the JSON schema of the given type.
+    ///
+    /// The schema is converted to a Lark grammar via [`json_schema_to_lark`],
+    /// compiled once per unique `type_id`, then cached in the [`ParserRegistry`]
+    /// for subsequent calls.
+    fn json_constraint(
+        &mut self,
+        type_id: TypeId,
+        json_schema: &dyn Fn() -> Result<serde_json::Value, InferenceError>,
+    ) -> Result<Box<dyn SlmConstraint>, InferenceError> {
         if let Some(parser) = self.parser(type_id, None)? {
             return Ok(Box::new(LarkConstraint::new(parser)));
         }
-        let thinking = self.formatter.reasoning_bounds().map(|(s,e)| (s.trim(), e.trim()));
-        let lark = json_schema_to_lark(json_schema()?, thinking).map_err(|s| InferenceError::InvalidJsonSchema(s.to_string()))?;
+        let thinking = self
+            .formatter
+            .reasoning_bounds()
+            .map(|(s, e)| (s.trim(), e.trim()));
+        let lark = json_schema_to_lark(json_schema()?, thinking)
+            .map_err(|s| InferenceError::InvalidJsonSchema(s.to_string()))?;
         let grammar = TopLevelGrammar::from_lark(lark);
         let parser = self
             .parser(type_id, Some(grammar))?
@@ -237,4 +256,3 @@ impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
         Ok(Box::new(LarkConstraint::new(parser)))
     }
 }
-

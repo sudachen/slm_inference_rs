@@ -1,6 +1,11 @@
 use crate::SlmRole;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 
+/// [`SlmFormatter`] for Meta Llama 3 models.
+///
+/// Uses Llama 3's `<|start_header_id|>role<|end_header_id|>` header tokens and
+/// `<|eot_id|>` end-of-turn markers.  Reasoning blocks use `<think>` / `</think>` tags.
+/// Tool responses occupy a dedicated `ipython` role turn ([`SlmToolStyle::SeparateTurn`]).
 pub struct Llama3Formatter;
 
 impl SlmFormatter for Llama3Formatter {

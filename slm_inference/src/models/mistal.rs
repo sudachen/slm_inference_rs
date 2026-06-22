@@ -1,6 +1,11 @@
 use crate::SlmRole;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 
+/// [`SlmFormatter`] for Mistral AI models.
+///
+/// Supports both the modern V3/Tekken tokenizer template (`[INST]` / `[/INST]`
+/// with native system and tool tokens) and the legacy v1/v2 template.
+/// Reasoning blocks use `<think>` / `</think>` tags (for R1 distillations).
 pub struct MistralFormatter {
     flavor: MistralFlavor,
     thinking: bool,

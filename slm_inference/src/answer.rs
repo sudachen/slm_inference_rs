@@ -3,22 +3,36 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
 
+/// The result of a single generation call, capturing both the generated text and
+/// the completion state of that generation.
+///
+/// All three variants carry `(text, fork_id)`.  `Complete` additionally
+/// holds an optional `thinking` string extracted by [`split_thought`](Self::split_thought).
 #[derive(Clone, Debug)]
 pub enum SlmAnswer {
+    /// Generation finished naturally (EOS token reached or constraint satisfied).
+    /// The third field contains the model's chain-of-thought, if the formatter
+    /// supports reasoning and [`split_thought`](Self::split_thought) has been called.
     // (answer, fork_id, thinking)
     Complete(String, usize, Option<String>),
+    /// Generation was stopped early by an [`SlmAction::Delay`] callback.
+    /// The accumulated text so far is valid but the sequence is not yet closed.
     Partial(String, usize),
+    /// Generation was interrupted (e.g. token limit exceeded) before a natural stop.
     Incomplete(String, usize),
 }
 
 impl SlmAnswer {
+    /// Returns `true` if the answer completed naturally (EOS or constraint stop).
     pub fn is_complete(&self) -> bool {
         matches!(self, SlmAnswer::Complete(_, _, _))
     }
+    /// Returns `true` if the answer was paused mid-generation by a `Delay` action.
     pub fn is_partial(&self) -> bool {
         matches!(self, SlmAnswer::Partial(_, _))
     }
 
+    /// Returns the generated text regardless of completion state.
     pub fn as_str(&self) -> &str {
         match self {
             SlmAnswer::Complete(s, _, _)
@@ -27,10 +41,12 @@ impl SlmAnswer {
         }
     }
 
+    /// Alias for [`as_str`](Self::as_str).
     pub fn text(&self) -> &str {
         self.as_str()
     }
 
+    /// Returns the fork/sequence identifier associated with this answer.
     pub fn fork_id(&self) -> usize {
         match self {
             SlmAnswer::Complete(_, id, _)
@@ -39,6 +55,8 @@ impl SlmAnswer {
         }
     }
 
+    /// Apply a transformation function to the inner text string, preserving variant and
+    /// metadata (fork ID, thinking content).
     pub fn map<F>(self, f: F) -> Self
     where
         F: FnOnce(String) -> String,
@@ -50,6 +68,12 @@ impl SlmAnswer {
         }
     }
 
+    /// Extract any chain-of-thought content from the text using the formatter's
+    /// [`reasoning_bounds`](SlmFormatter::reasoning_bounds) tags, storing it in the
+    /// `thinking` field of [`SlmAnswer::Complete`].
+    ///
+    /// Has no effect on `Partial` or `Incomplete` variants, or if a thinking string
+    /// is already present.
     pub fn split_thought(self, formatter: &dyn SlmFormatter) -> SlmAnswer {
         match self {
             Self::Complete(text, fork_id, None) => {
@@ -60,6 +84,10 @@ impl SlmAnswer {
         }
     }
 
+    /// Returns the extracted chain-of-thought string, if available.
+    ///
+    /// Only populated for [`SlmAnswer::Complete`] after [`split_thought`](Self::split_thought)
+    /// has been called.
     pub fn thought(&self) -> Option<&str> {
         match self {
             Self::Complete(_, _, thought) => thought.as_deref(),

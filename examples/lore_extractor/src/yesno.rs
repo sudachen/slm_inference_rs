@@ -62,7 +62,7 @@ impl YesNoArgs {
             let question = q.question;
             let no = no + 1;
             println!("Question {no}: {question}");
-            let answer = oracle.ask(self.think, &question)?;
+            let answer = oracle.ask(self.think, &question, None)?;
             println!("E {question} -> {answer} ?= {}", q.answer);
             println!("T {}", answer.thought().unwrap_or(""));
             if answer.trim().to_lowercase() != q.answer.trim().to_lowercase() {

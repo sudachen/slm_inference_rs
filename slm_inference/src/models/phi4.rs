@@ -1,6 +1,12 @@
 use crate::SlmRole;
 use crate::formatter::{SlmFormatter, SlmToolStyle};
 
+/// [`SlmFormatter`] for Microsoft Phi-4 models.
+///
+/// Uses Phi-4's role tokens (`system`, `user`, `assistant`, `end`) and a unified
+/// `<|end|>` turn-closing token.  There is no explicit BOS token; the model starts
+/// directly with the first role delimiter.  Reasoning blocks use `<think>` /
+/// `</think>` tags (for DeepSeek-R1-Distill-Phi-4 distillations).
 pub struct Phi4Formatter {
     thinking: bool,
 }

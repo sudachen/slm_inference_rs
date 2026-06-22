@@ -1,6 +1,7 @@
 use std::os::raw::c_int;
 use std::string::FromUtf8Error;
 
+/// Errors that can occur during the model's forward-pass (decode) step.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
     #[error("Decode Error: NoKvCacheSlot")]
@@ -21,6 +22,7 @@ impl From<i32> for DecodeError {
     }
 }
 
+/// Errors arising during token sampling (logit processing, constraint evaluation, etc.).
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum SamplingError {
     #[error("Sampling Error: {0}")]
@@ -29,6 +31,7 @@ pub enum SamplingError {
     Stop,
 }
 
+/// Errors converting a token ID to its byte or string representation.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum TokenToStringError {
     #[error("Unknown Token Type")]
@@ -43,6 +46,7 @@ pub enum TokenToStringError {
     FfiError(#[from] FfiError),
 }
 
+/// Errors converting a UTF-8 string into a sequence of token IDs.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum StringToTokenError {
     #[error("FromUtf8Error {0}")]
@@ -51,6 +55,10 @@ pub enum StringToTokenError {
     FfiError(#[from] FfiError),
 }
 
+/// Top-level inference error that unifies all failure modes across the generation pipeline.
+///
+/// Implements `From` for all lower-level error types so that `?` propagation works
+/// throughout the call stack.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum InferenceError {
     #[error("Error {0}")]
@@ -83,6 +91,7 @@ pub enum InferenceError {
     InvalidJsonSchema(String),
 }
 
+/// Errors that can occur while loading a GGUF model file.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum GgufLoaderError {
     #[error("Invalid Path")]
@@ -93,6 +102,7 @@ pub enum GgufLoaderError {
     FfiError(#[from] FfiError),
 }
 
+/// Errors arising when building or submitting a token batch.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BatchError {
     #[error("Insufficient Space of {0}")]
@@ -107,6 +117,7 @@ pub enum BatchError {
     InternalError(String),
 }
 
+/// Errors originating at the FFI boundary with the backend C library.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum FfiError {
     #[error("Null Ptr")]
@@ -119,12 +130,14 @@ pub enum FfiError {
     Error(String),
 }
 
+/// Errors that can occur while constructing an [`SlmContext`](crate::SlmContext) via a builder.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ContextBuilderError {
     #[error("Ffi Error {0}")]
     FfiError(#[from] FfiError),
 }
 
+/// Errors from KV-cache editing operations (clear, truncate, cut, dump, restore).
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ContextError {
     #[error("Error {0}")]
@@ -137,12 +150,14 @@ pub enum ContextError {
     Unsupported,
 }
 
+/// Error returned when an unrecognised formatter name is passed to [`SlmDynamicFormatter`](crate::SlmDynamicFormatter).
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ModelFormatterError {
     #[error("Unknown model formatter {0}")]
     UnknownModelFormatter(String),
 }
 
+/// Errors from the `llguidance` constrained-generation layer.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum GuidanceError {
     #[error("Error {0}")]
