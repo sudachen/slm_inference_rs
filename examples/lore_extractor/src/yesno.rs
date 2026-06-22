@@ -1,6 +1,5 @@
 #![allow(unused)]
 
-use crate::backend::{BackendId, ModelId, selector};
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use epubscan::EpubScan;
@@ -14,14 +13,8 @@ use tracing::{debug, error};
 
 #[derive(Parser, Debug)]
 pub struct YesNoArgs {
-    #[arg(short, long, default_value_t = BackendId::default())]
-    pub backend: BackendId,
-    #[arg(short, long, default_value_t = ModelId::default())]
-    pub model: ModelId,
     #[arg(short, long)]
     pub think: bool,
-    #[arg(long)]
-    pub cpu: bool,
     #[arg(short, long)]
     pub output: Option<PathBuf>,
     #[arg(num_args(1))]
@@ -31,7 +24,7 @@ pub struct YesNoArgs {
 }
 
 impl YesNoArgs {
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self, oracle: &mut dyn SlmOracle) -> Result<()> {
         println!(
             "Answer Yes/No for questions over {} file(s):",
             self.input.len()
@@ -40,7 +33,6 @@ impl YesNoArgs {
             .create(true)
             .append(true)
             .open(self.output.clone().unwrap_or("entities.json".into()))?;
-        let mut oracle = selector(self.model, self.backend, self.cpu)?;
         oracle.system("You are a precise tool that answers only \"Yes\" or \"No\" without any other symbols based on the text:")?;
         for (index, file) in self.input.iter().enumerate() {
             println!("  File {}: {:?}", index + 1, file);
@@ -70,11 +62,7 @@ impl YesNoArgs {
             let question = q.question;
             let no = no + 1;
             println!("Question {no}: {question}");
-            let answer = if self.think {
-                oracle.think(&question, None)
-            } else {
-                oracle.ask(&question, None)
-            }?;
+            let answer = oracle.ask(self.think, &question)?;
             println!("E {question} -> {answer} ?= {}", q.answer);
             println!("T {}", answer.thought().unwrap_or(""));
             if answer.trim().to_lowercase() != q.answer.trim().to_lowercase() {

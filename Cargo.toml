@@ -46,4 +46,7 @@ find_cuda_helper = "0.2.0"
 cc = "1.2.62"
 thiserror = "2.0.18"
 enum_dispatch = "0.3"
-itertools = "0.14.0"
+itertools = "0.15"
+llguidance = "1.7"
+schemars = "1.2"
+strum = { version = "0.28", features = ["derive"] }

@@ -4,6 +4,7 @@ use slm_inference::errors::{FfiError, GgufLoaderError};
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
+use slm_inference::SlmModel;
 
 #[derive(Clone)]
 struct LlamaModelFree;
@@ -17,30 +18,32 @@ impl Free<llama_cpp_sys_2::llama_model> for LlamaModelFree {
 type ModelPtr = SharedPtr<llama_cpp_sys_2::llama_model, LlamaModelFree>;
 
 #[derive(Clone)]
-pub struct Model(ModelPtr);
+pub struct Model{
+    ptr: ModelPtr,
+}
 
 impl Model {
     #[allow(dead_code)]
     pub fn get_ptr(&self) -> Result<*mut llama_cpp_sys_2::llama_model, FfiError> {
-        if self.0.is_null() {
+        if self.ptr.is_null() {
             return Err(FfiError::NullPtr);
         }
-        Ok(self.0.get_ptr())
+        Ok(self.ptr.get_ptr())
     }
     #[allow(dead_code)]
     pub fn get_const_ptr(&mut self) -> Result<*const llama_cpp_sys_2::llama_model, FfiError> {
-        if self.0.is_null() {
+        if self.ptr.is_null() {
             return Err(FfiError::NullPtr);
         }
-        Ok(self.0.get_const_ptr())
+        Ok(self.ptr.get_const_ptr())
     }
     #[allow(dead_code)]
     pub fn raw_ptr(&self) -> *mut llama_cpp_sys_2::llama_model {
-        self.0.get_ptr()
+        self.ptr.get_ptr()
     }
 }
 
-impl slm_inference::SlmModel for Model {
+impl SlmModel for Model {
     type Context = crate::context::Context;
 
     #[allow(refining_impl_trait)]
@@ -130,12 +133,13 @@ impl slm_inference::SlmModelConfig for ModelConfig {
     type Context = crate::context::Context;
     type Model = Model;
 
+    #[inline(never)]
     fn load_gguf(self, path: impl AsRef<Path>) -> Result<Model, GgufLoaderError> {
         super::backend::init();
         let path_ref = path.as_ref();
         let path = path_ref.to_str().ok_or(GgufLoaderError::InvalidPath)?;
         let model = self.load_llama_model(path)?;
-        Ok(Model(ModelPtr::new(model)))
+        Ok(Model{ ptr: ModelPtr::new(model) })
     }
 }
 

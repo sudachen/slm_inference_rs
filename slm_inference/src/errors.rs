@@ -22,7 +22,12 @@ impl From<i32> for DecodeError {
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum SamplingError {}
+pub enum SamplingError {
+    #[error("Sampling Error: {0}")]
+    Error(String),
+    #[error("Stop")]
+    Stop,
+}
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum TokenToStringError {
@@ -70,6 +75,12 @@ pub enum InferenceError {
     Unsupported,
     #[error("Empty Batch")]
     EmptyBatch,
+    #[error("Incomplete Answer")]
+    IncompleteAnswer,
+    #[error("Invalid JSON")]
+    InvalidJson,
+    #[error("Invalid JSON Schema")]
+    InvalidJsonSchema(String),
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -130,4 +141,12 @@ pub enum ContextError {
 pub enum ModelFormatterError {
     #[error("Unknown model formatter {0}")]
     UnknownModelFormatter(String),
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum GuidanceError {
+    #[error("Error {0}")]
+    Error(String),
+    #[error("Ffi Error {0}")]
+    FfiError(#[from] FfiError),
 }

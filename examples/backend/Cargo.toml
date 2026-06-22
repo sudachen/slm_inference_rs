@@ -1,0 +1,20 @@
+[package]
+name = "backend"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+clap = {workspace = true}
+anyhow = {workspace = true}
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+slm_inference = {path = "../../slm_inference", version= "^0.1.1" }
+slm_llama = {path = "../../crates/slm_llama", version= "^0.1.1", features=["vulkan"], optional=true}
+slm_ikllama = {path = "../../crates/slm_ikllama", version= "^0.1.1", features=["cuda","native"], optional=true}
+strum = { workspace = true }
+
+[features]
+ikllama = ["dep:slm_ikllama", "slm_ikllama/cuda", "slm_ikllama/native"]
+llama = ["dep:slm_llama", "slm_llama/vulkan"]
+default = ["ikllama"]

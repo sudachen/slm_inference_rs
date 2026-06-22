@@ -27,13 +27,11 @@ impl SlmFormatter for GemmaFormatter {
             SlmRole::System => "<|turn>system\n".to_string(),
             SlmRole::User => "<|turn>user\n".to_string(),
             SlmRole::Assistant => "<|turn>model\n".to_string(),
-            SlmRole::Tool(_) => String::new(), // У Gemma инструменты внутри model turn
         }
     }
 
     fn turn_end(&self, role: &SlmRole) -> String {
         match role {
-            SlmRole::Tool(_) => String::new(),
             _ => "<turn|>\n".to_string(),
         }
     }

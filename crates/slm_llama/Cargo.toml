@@ -20,6 +20,7 @@ crate-type = ["dylib"]
 llama-cpp-sys-2 = "0.1.146"
 slm_inference = { path = "../../slm_inference", version = "^0.1.1" }
 tracing = { workspace = true }
+toktrie = "1.7.6"
 
 [features]
 vulkan = ["llama-cpp-sys-2/vulkan"]

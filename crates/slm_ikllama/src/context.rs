@@ -1,14 +1,12 @@
 use crate::batch::{Batch, Token};
 use crate::model::Model;
-use std::ffi::CString;
-use std::os::raw::c_int;
+use crate::vocab::Vocab;
 
 use slm_inference::core::shared_ptr::{Free, SharedPtr};
 use slm_inference::errors::{
-    BatchError, ContextBuilderError, ContextError, DecodeError, FfiError, SamplingError,
-    StringToTokenError, TokenToStringError,
+    BatchError, ContextBuilderError, ContextError, DecodeError, SamplingError,
 };
-use slm_inference::{SlmContext, SlmContextBuilder, SlmEditLevel, SlmKvType, SlmPos, SlmToken};
+use slm_inference::{SlmConstraint, SlmContext, SlmContextBuilder, SlmEditLevel, SlmKvType, SlmPos};
 
 #[derive(Clone)]
 struct LlamaContextFree;
@@ -36,6 +34,10 @@ pub struct Context {
 impl SlmContext for Context {
     type Token = Token;
     type Batch = Batch;
+    type Vocab = Vocab;
+    fn vocab(&self) -> &Self::Vocab {
+        self.model.vocab()
+    }
 
     fn new_batch(&self, tokens: usize, sequences: usize) -> Result<Batch, BatchError> {
         Batch::new(tokens, sequences)
@@ -58,12 +60,17 @@ impl SlmContext for Context {
     }
 
     #[inline(never)]
-    fn sample(&mut self, logit_idx: usize) -> Result<Option<Self::Token>, SamplingError> {
+    fn sample_with_constraint(&mut self, logit_idx: usize, constraint: Option<&mut dyn SlmConstraint>) -> Result<Option<Self::Token>, SamplingError> {
         unsafe {
             let ctx = self.ctx.get_ptr();
             // TODO: validate logit_idx
             let logits_ptr = slm_ikllama_sys::llama_get_logits_ith(ctx, logit_idx as i32);
-            let logits = std::slice::from_raw_parts(logits_ptr, self.n_vocab);
+            let logits = std::slice::from_raw_parts_mut(logits_ptr, self.n_vocab);
+            if let Some(c) = constraint {
+                if !c.mask(logits)? {
+                    return Ok(None);
+                }
+            }
             let mut candidates_vec: Vec<slm_ikllama_sys::llama_token_data> = (0..self.n_vocab)
                 .map(|id| slm_ikllama_sys::llama_token_data {
                     id: id as slm_ikllama_sys::llama_token,
@@ -83,8 +90,9 @@ impl SlmContext for Context {
                 slm_ikllama_sys::llama_sample_token_greedy(ctx, &mut candidates_array)
             } else {
                 slm_ikllama_sys::llama_sample_top_k(ctx, &mut candidates_array, self.top_k, 1);
-                slm_ikllama_sys::llama_sample_top_p(ctx, &mut candidates_array, self.top_p, 1);
                 slm_ikllama_sys::llama_sample_temp(ctx, &mut candidates_array, self.temperature);
+                slm_ikllama_sys::llama_sample_softmax(ctx, &mut candidates_array);
+                slm_ikllama_sys::llama_sample_top_p(ctx, &mut candidates_array, self.top_p, 1);
                 slm_ikllama_sys::llama_sample_token(ctx, &mut candidates_array)
             };
 
@@ -97,106 +105,15 @@ impl SlmContext for Context {
     }
 
     #[inline(never)]
-    fn token_to_bytes(
-        &self,
-        token: Self::Token,
-        buffer_size: usize,
-        special: bool,
-        lstrip: Option<usize>,
-    ) -> Result<Vec<u8>, TokenToStringError> {
-        let string = CString::new(vec![b'*'; buffer_size]).expect("no null");
-        let len = string.as_bytes().len();
-        let len = c_int::try_from(len).expect("length fits into c_int");
-        let buf = string.into_raw();
-        let lstrip = lstrip
-            .map_or(Ok(0), i32::try_from)
-            .map_err(|_| TokenToStringError::InvalidLstrip)?;
-        let size = unsafe {
-            slm_ikllama_sys::llama_token_to_piece(
-                self.model.get_const_ptr()?,
-                token.as_i32() as slm_ikllama_sys::llama_token,
-                buf,
-                len,
-                lstrip,
-                special,
-            )
-        };
-
-        match size {
-            0 => Ok(vec![]),
-            i if i.is_negative() => Err(TokenToStringError::InsufficientBufferSpace(i)),
-            size => {
-                let string = unsafe { CString::from_raw(buf) };
-                let mut bytes = string.into_bytes();
-                let len = usize::try_from(size).expect("size is positive and fits into usize");
-                bytes.truncate(len);
-                Ok(bytes)
-            }
-        }
-    }
-
-    #[inline(never)]
-    fn str_to_tokens(
-        &self,
-        str: &str,
-        add_special: bool,
-        parse_special: bool,
-    ) -> Result<Vec<Self::Token>, StringToTokenError> {
-        let add_bos = match add_special {
-            true => 1,
-            _ => 0,
-        };
-        let tokens_estimation = std::cmp::max(8, (str.len() / 2) + add_bos);
-        let mut buffer: Vec<Self::Token> = Vec::with_capacity(tokens_estimation);
-        let c_string = CString::new(str).map_err(|_| FfiError::CstAllocationError)?;
-        let buffer_capacity =
-            c_int::try_from(buffer.capacity()).map_err(|_| FfiError::CintConversionError)?;
-
-        let text_len = c_int::try_from(c_string.as_bytes().len())
-            .map_err(|_| FfiError::CintConversionError)?;
-
-        let size = unsafe {
-            slm_ikllama_sys::llama_tokenize(
-                self.model.get_const_ptr()?,
-                c_string.as_ptr(),
-                text_len,
-                buffer.as_mut_ptr().cast::<slm_ikllama_sys::llama_token>(),
-                buffer_capacity,
-                add_special,
-                parse_special,
-            )
-        };
-
-        // if we fail the first time we can resize the vector to the correct size and try again. This should never fail.
-        // as a result - size is guaranteed to be positive here.
-        let size = if size.is_negative() {
-            buffer.reserve_exact(usize::try_from(-size).expect("usize's are larger "));
-            unsafe {
-                slm_ikllama_sys::llama_tokenize(
-                    self.model.get_const_ptr()?,
-                    c_string.as_ptr(),
-                    text_len,
-                    buffer.as_mut_ptr().cast::<slm_ikllama_sys::llama_token>(),
-                    -size,
-                    add_special,
-                    parse_special,
-                )
-            }
-        } else {
-            size
-        };
-
-        let size = usize::try_from(size).expect("size is positive and usize ");
-
-        // Safety: `size` < `capacity` and llama-cpp has initialized elements up to `size`
-        unsafe { buffer.set_len(size) }
-        Ok(buffer)
-    }
-
-    #[inline(never)]
     fn clear(&mut self) -> Result<(), ContextError> {
         let ctx = self.ctx.get_ptr();
         unsafe { slm_ikllama_sys::llama_kv_cache_clear(ctx) };
+        Ok(())
+    }
+
+    fn drop(&mut self, fork_id: usize) -> Result<(), ContextError> {
+        let ctx = self.ctx.get_ptr();
+        unsafe { slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, -1, -1) };
         Ok(())
     }
 
@@ -245,12 +162,6 @@ impl SlmContext for Context {
             slm_ikllama_sys::llama_kv_cache_seq_pos_max(ctx, start_pos.fork_id as i32) + 1
         };
         Ok(SlmPos::new(next_pos as usize, start_pos.fork_id))
-    }
-
-    fn drop(&mut self, fork_id: usize) -> Result<(), ContextError> {
-        let ctx = self.ctx.get_ptr();
-        unsafe { slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, -1, -1) };
-        Ok(())
     }
 
     fn dump(&mut self) -> Result<Vec<u8>, ContextError> {
@@ -388,10 +299,17 @@ impl SlmContextBuilder<Context> for Builder {
     fn with_gen_type_kv(mut self, k: SlmKvType, v: SlmKvType) -> Self {
         let (k, kh) = KVType::from(k).unwrap();
         let (v, vh) = KVType::from(v).unwrap();
+        self.params.flash_attn = true;
         self.params.type_k = k as u32;
         self.params.k_cache_hadamard = kh;
         self.params.type_v = v as u32;
         self.params.v_cache_hadamard = vh;
+        self
+    }
+
+    #[inline(never)]
+    fn with_flash_attn(mut self, enable: bool) -> Self {
+        self.params.flash_attn = enable;
         self
     }
 }

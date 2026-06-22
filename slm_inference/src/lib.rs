@@ -7,19 +7,24 @@ mod formatter;
 pub mod inference;
 pub mod models;
 mod oracle;
-
-use std::path::Path;
-use std::result::Result;
+mod simple_oracle;
+mod llg_lark;
 
 pub use answer::SlmAnswer;
 use errors::*;
 pub use formatter::SlmFormatter;
 pub use inference::{SlmBoxedBrakeFn, SlmBrake, SlmInference, SlmSimpleInference};
 pub use models::SlmDynamicFormatter;
-pub use oracle::{SlmOracle, SlmSimpleOracle};
+pub use oracle::{SlmOracle, SlmJsonOracle};
+pub use simple_oracle::SlmSimpleOracle;
+pub use llg_lark::SlmSimpleTokEnv;
+use std::path::Path;
+use std::result::Result;
+use llguidance::toktrie;
 
 pub trait SlmToken: Copy {
     fn as_i32(&self) -> i32;
+    fn from_i32(i: i32) -> Self;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,7 +32,6 @@ pub enum SlmRole {
     System,
     User,
     Assistant,
-    Tool(String),
 }
 
 impl SlmRole {
@@ -36,23 +40,7 @@ impl SlmRole {
             SlmRole::System => "system",
             SlmRole::User => "user",
             SlmRole::Assistant => "assistant",
-            SlmRole::Tool(_) => "tool",
         }
-    }
-
-    pub fn is_tool(&self) -> bool {
-        matches!(self, SlmRole::Tool(_))
-    }
-
-    pub fn tool_name(&self) -> Option<&str> {
-        match self {
-            SlmRole::Tool(name) => Some(name.as_str()),
-            _ => None,
-        }
-    }
-
-    pub fn tool(name: &str) -> SlmRole {
-        SlmRole::Tool(name.to_string())
     }
 }
 
@@ -88,6 +76,26 @@ pub trait SlmModelConfig {
     fn load_gguf(self, path: impl AsRef<Path>) -> Result<Self::Model, GgufLoaderError>;
 }
 
+pub type SlmTokEnv = toktrie::TokEnv;
+
+pub trait SlmVocab {
+    type Token: SlmToken;
+    fn vocab_size(&self) -> usize;
+    fn token_to_bytes(
+        &self,
+        token: Self::Token,
+        special: bool,
+        left_strip: Option<usize>,
+    ) -> Result<Vec<u8>, TokenToStringError>;
+    fn str_to_tokens(
+        &self,
+        str: &str,
+        add_special: bool,
+        parse_special: bool,
+    ) -> Result<Vec<Self::Token>, StringToTokenError>;
+    fn tok_env(&self) -> &SlmTokEnv;
+}
+
 pub trait SlmModel {
     type Context: SlmContext;
     fn context(&self) -> impl SlmContextBuilder<Self::Context>;
@@ -109,6 +117,7 @@ pub trait SlmContextBuilder<T> {
     fn with_n_ctx(self, n_ctx: usize) -> Self;
     fn with_gen_type_kv(self, k: SlmKvType, v: SlmKvType) -> Self;
     fn with_n_batch(self, n_batch: usize) -> Self;
+    fn with_flash_attn(self, enable: bool) -> Self;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd)]
@@ -117,6 +126,19 @@ pub enum SlmEditLevel {
     DumpRestore = 0,
     Cut = 1,
     Truncate = 2,
+}
+
+#[derive(Debug, Clone)]
+pub enum SlmConstraintStep {
+    FastForward(Vec<i32>),
+    Forward,
+    Stop,
+}
+
+pub trait SlmConstraint {
+    fn mask(&mut self, logits: &mut [f32]) -> Result<bool, SamplingError>;
+    fn forward(&mut self, token_id: i32) -> Result<SlmConstraintStep, SamplingError>;
+    fn prefill(&mut self, text: &str) -> Result<(), SamplingError>;
 }
 
 /// Core inference context that owns a KV cache and provides all token-level operations
@@ -130,6 +152,8 @@ pub trait SlmContext {
     type Token: SlmToken;
     /// The batch type used to submit tokens for decoding.
     type Batch: SlmBatch<Self::Token>;
+    type Vocab: SlmVocab<Token = Self::Token>;
+    fn vocab(&self) -> &Self::Vocab;
 
     /// Allocates a new batch capable of holding up to `tokens` token slots across
     /// up to `sequences` parallel sequences.
@@ -146,7 +170,11 @@ pub trait SlmContext {
     /// Samples the next token from the logits stored at slot `logit_idx` of the most
     /// recently decoded batch.  Returns `None` when the model signals end-of-sequence
     /// via an EOS token.
-    fn sample(&mut self, logit_idx: usize) -> Result<Option<Self::Token>, SamplingError>;
+    fn sample_with_constraint(
+        &mut self,
+        logit_idx: usize,
+        constraint: Option<&mut dyn SlmConstraint>,
+    ) -> Result<Option<Self::Token>, SamplingError>;
 
     /// Converts `token` to its raw byte representation.
     ///
@@ -158,10 +186,11 @@ pub trait SlmContext {
     fn token_to_bytes(
         &self,
         token: Self::Token,
-        buffer_size: usize,
         special: bool,
-        lstrip: Option<usize>,
-    ) -> Result<Vec<u8>, TokenToStringError>;
+        left_strip: Option<usize>,
+    ) -> Result<Vec<u8>, TokenToStringError> {
+        self.vocab().token_to_bytes(token, special, left_strip)
+    }
 
     /// Tokenizes `str` into a sequence of model tokens.
     ///
@@ -173,7 +202,9 @@ pub trait SlmContext {
         str: &str,
         add_special: bool,
         parse_special: bool,
-    ) -> Result<Vec<Self::Token>, StringToTokenError>;
+    ) -> Result<Vec<Self::Token>, StringToTokenError> {
+        self.vocab().str_to_tokens(str, add_special, parse_special)
+    }
 
     /// Resets the context to an empty state, discarding the entire KV cache.
     fn clear(&mut self) -> Result<(), ContextError>;

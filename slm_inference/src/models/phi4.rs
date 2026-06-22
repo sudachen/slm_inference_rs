@@ -24,13 +24,11 @@ impl SlmFormatter for Phi4Formatter {
             SlmRole::System => "<|system|>\n".to_string(),
             SlmRole::User => "<|user|>\n".to_string(),
             SlmRole::Assistant => "<|assistant|>\n".to_string(),
-            SlmRole::Tool(_) => String::new(), // Tools are embedded inside the assistant turn
         }
     }
 
     fn turn_end(&self, role: &SlmRole) -> String {
         match role {
-            SlmRole::Tool(_) => String::new(),
             // Microsoft's philosophy: every turn, regardless of role, is closed with a single <|end|> token
             _ => "<|end|>\n".to_string(),
         }

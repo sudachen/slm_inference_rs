@@ -33,14 +33,12 @@ impl SlmFormatter for MistralFormatter {
                 SlmRole::User => "[INST]".to_string(),
                 // In Mistral, the model response follows IMMEDIATELY after [/INST] with no prefix
                 SlmRole::Assistant => String::new(),
-                SlmRole::Tool(_) => String::new(),
             },
             MistralFlavor::Legacy => match role {
                 // Legacy models had no system token; system text was packed inside [INST]
                 SlmRole::System => "[INST] ".to_string(),
                 SlmRole::User => "[INST]".to_string(),
                 SlmRole::Assistant => String::new(),
-                SlmRole::Tool(_) => String::new(),
             },
         }
     }
@@ -52,13 +50,11 @@ impl SlmFormatter for MistralFormatter {
                 SlmRole::User => " [/INST]\n".to_string(),
                 // Each assistant turn in Mistral is closed with the classic EOS
                 SlmRole::Assistant => "</s>".to_string(),
-                SlmRole::Tool(_) => String::new(),
             },
             MistralFlavor::Legacy => match role {
                 SlmRole::System => "\n\n".to_string(), // Separate system from user with a newline
                 SlmRole::User => "[/INST]".to_string(),
                 SlmRole::Assistant => "</s>".to_string(),
-                SlmRole::Tool(_) => String::new(),
             },
         }
     }

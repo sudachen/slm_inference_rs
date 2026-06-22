@@ -16,3 +16,5 @@ slm_ikllama = {path = "../../crates/slm_ikllama", version= "^0.1.1", features=["
 itertools = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}
+backend = {path = "../backend", version = "^0.1.1", features=["ikllama","llama"]}
+schemars = { workspace = true }

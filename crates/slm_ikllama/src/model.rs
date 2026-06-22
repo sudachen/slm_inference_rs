@@ -4,6 +4,9 @@ use slm_inference::errors::{FfiError, GgufLoaderError};
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
+use std::sync::Arc;
+use slm_inference::SlmModel;
+use crate::vocab::Vocab;
 
 #[derive(Clone)]
 struct LlamaModelFree;
@@ -17,30 +20,38 @@ impl Free<slm_ikllama_sys::llama_model> for LlamaModelFree {
 type ModelPtr = SharedPtr<slm_ikllama_sys::llama_model, LlamaModelFree>;
 
 #[derive(Clone)]
-pub struct Model(ModelPtr);
+pub struct Model {
+    ptr: ModelPtr,
+    vocab: Arc<Vocab>,
+}
 
 impl Model {
     #[allow(dead_code)]
     pub fn get_ptr(&mut self) -> Result<*mut slm_ikllama_sys::llama_model, FfiError> {
-        if self.0.is_null() {
+        if self.ptr.is_null() {
             return Err(FfiError::NullPtr);
         }
-        Ok(self.0.get_ptr())
+        Ok(self.ptr.get_ptr())
     }
     #[allow(dead_code)]
     pub fn get_const_ptr(&self) -> Result<*const slm_ikllama_sys::llama_model, FfiError> {
-        if self.0.is_null() {
+        if self.ptr.is_null() {
             return Err(FfiError::NullPtr);
         }
-        Ok(self.0.get_const_ptr())
+        Ok(self.ptr.get_const_ptr())
     }
     #[allow(dead_code)]
     pub fn raw_ptr(&self) -> *mut slm_ikllama_sys::llama_model {
-        self.0.get_ptr()
+        self.ptr.get_ptr()
+    }
+
+    #[allow(refining_impl_trait)]
+    pub(crate) fn vocab(&self) -> &Vocab {
+        self.vocab.as_ref()
     }
 }
 
-impl slm_inference::SlmModel for Model {
+impl SlmModel for Model {
     type Context = crate::context::Context;
 
     #[allow(refining_impl_trait)]
@@ -135,7 +146,12 @@ impl slm_inference::SlmModelConfig for ModelConfig {
         let path_ref = path.as_ref();
         let path = path_ref.to_str().ok_or(GgufLoaderError::InvalidPath)?;
         let model = self.load_llama_model(path)?;
-        Ok(Model(ModelPtr::new(model)))
+        let vcab_ptr = unsafe { slm_ikllama_sys::llama_model_get_vocab(model) };
+        let vocab = Arc::new(Vocab::new(model, vcab_ptr));
+        Ok(Model{
+            ptr: ModelPtr::new(model),
+            vocab,
+        })
     }
 }
 

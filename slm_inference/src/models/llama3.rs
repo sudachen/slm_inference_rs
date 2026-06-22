@@ -16,7 +16,7 @@ impl SlmFormatter for Llama3Formatter {
             SlmRole::System => "<|start_header_id|>system<|end_header_id|>\n\n".to_string(),
             SlmRole::User => "<|start_header_id|>user<|end_header_id|>\n\n".to_string(),
             SlmRole::Assistant => "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
-            SlmRole::Tool(_) => "<|start_header_id|>ipython<|end_header_id|>\n\n".to_string(),
+            // "<|start_header_id|>ipython<|end_header_id|>\n\n".to_string(),
         }
     }
 

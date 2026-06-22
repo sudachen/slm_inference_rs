@@ -1,10 +1,21 @@
-use crate::errors::InferenceError;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
-use crate::{
-    SlmAnswer, SlmBoxedBrakeFn, SlmBrake, SlmContext, SlmInference, SlmRole, SlmSimpleInference,
-};
+use crate::errors::{InferenceError, SamplingError};
+use crate::{SlmAnswer, SlmBoxedBrakeFn, SlmConstraint, SlmConstraintStep, SlmPos, SlmRole};
+use schemars::JsonSchema;
+use serde::de::DeserializeOwned;
+use std::any::TypeId;
 
-const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
+pub(crate) const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
+
+pub struct SlmOracleState {
+    pub(crate) pos: SlmPos,
+    pub(crate) role: Option<SlmRole>,
+}
+
+impl SlmOracleState {
+    pub fn new(pos: SlmPos, role: Option<SlmRole>) -> Self {
+        Self { pos, role }
+    }
+}
 
 /// High-level interface for interacting with a language model in a conversational manner.
 ///
@@ -14,7 +25,7 @@ const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
 pub trait SlmOracle {
     /// Append a pre-formatted turn to the context without generating a response.
     /// Use this to replay history or inject system/user/assistant messages verbatim.
-    fn prompt(&mut self, role: &SlmRole, text: &str) -> Result<(), InferenceError>;
+    fn prompt(&mut self, role: &SlmRole, text: &str) -> Result<usize, InferenceError>;
     /// Append the user/tool turn, then generate the model's response.
     ///
     /// The context is saved before generation and automatically rolled back
@@ -30,220 +41,97 @@ pub trait SlmOracle {
         /*User/Tool*/ role: &SlmRole,
         text: &str,
         think: bool,
+        reset: bool,
         brake: Option<SlmBoxedBrakeFn>,
+        constraint: Option<&mut dyn SlmConstraint>,
     ) -> Result<SlmAnswer, InferenceError>;
 
     /// Reset the conversation: clear the KV cache and forget all turn state.
     fn clear(&mut self) -> Result<(), InferenceError>;
 
     /// Convenience wrapper: append a system-role turn to the context.
-    fn system(&mut self, text: &str) -> Result<(), InferenceError> {
+    fn system(&mut self, text: &str) -> Result<usize, InferenceError> {
         self.prompt(&SlmRole::System, text)
     }
     /// Convenience wrapper: append a user-role turn to the context.
-    fn user(&mut self, text: &str) -> Result<(), InferenceError> {
+    fn user(&mut self, text: &str) -> Result<usize, InferenceError> {
         self.prompt(&SlmRole::User, text)
     }
     /// Convenience wrapper: append an assistant-role turn to the context.
-    fn assistant(&mut self, text: &str) -> Result<(), InferenceError> {
+    fn assistant(&mut self, text: &str) -> Result<usize, InferenceError> {
         self.prompt(&SlmRole::Assistant, text)
-    }
-    /// Convenience wrapper: append a tool-response turn to the context.
-    fn tool(&mut self, tool_name: &str, text: &str) -> Result<(), InferenceError> {
-        self.prompt(&SlmRole::tool(tool_name), text)
     }
 
     /// Generate an answer to `text` without retaining the exchange in the context.
     /// Equivalent to `generate(User, text, think=false, brake)`.
-    fn ask(
+    fn ask(&mut self, think: bool, text: &str) -> Result<SlmAnswer, InferenceError> {
+        self.generate(&SlmRole::User, text, think, true, None, None)
+    }
+
+    fn turn(&mut self, text: &str, think: bool) -> Result<SlmAnswer, InferenceError> {
+        self.generate(&SlmRole::User, text, think, false, None, None)
+    }
+
+    fn rollback(&mut self, state: &SlmOracleState) -> Result<(), InferenceError>;
+    fn save(&mut self) -> Result<SlmOracleState, InferenceError>;
+    fn tokens_n(&self) -> usize;
+    fn set_max_answer_tokens(&mut self, max_answer_tokens: usize);
+
+    fn json_constraint(
         &mut self,
-        text: &str,
-        brake: Option<SlmBoxedBrakeFn>,
-    ) -> Result<SlmAnswer, InferenceError> {
-        self.generate(&SlmRole::User, text, false, brake)
+        _type_id: TypeId,
+        _json_schema: &dyn Fn() -> Result<serde_json::Value, InferenceError>,
+    ) -> Result<Box<dyn SlmConstraint>, InferenceError> {
+        Ok(Box::new(Unconstrained))
     }
+}
 
-    /// Generate a reasoned answer to `text` without retaining the exchange in the context.
-    /// Injects the reasoning trigger prefix so the model produces chain-of-thought output.
-    /// Equivalent to `generate(User, text, think=true, brake)`.
-    fn think(
+pub trait SlmJsonOracle {
+    fn json_ask<T: DeserializeOwned + JsonSchema + 'static>(
         &mut self,
-        text: &str,
-        brake: Option<SlmBoxedBrakeFn>,
-    ) -> Result<SlmAnswer, InferenceError> {
-        self.generate(&SlmRole::User, text, true, brake)
-    }
-}
-
-/// Standard [`SlmOracle`] implementation backed by any [`SlmInference`] engine
-/// and any [`SlmFormatter`].
-///
-/// Tracks the currently active role and whether the KV cache is empty so it
-/// can emit the correct opening BOS token and role delimiters.
-pub struct SlmSimpleOracle<I: SlmInference, F: SlmFormatter> {
-    inference: I,
-    formatter: F,
-    max_answer_tokens: usize,
-    is_fresh_context: bool,
-    active_turn: Option<SlmRole>,
-}
-
-/// RAII guard that rolls back the inference KV cache to the last save point on drop.
-///
-/// Used inside [`SlmSimpleOracle::generate`] to ensure the generated tokens are
-/// never committed to the persistent context.
-struct SavePoint<'a>(&'a mut dyn SlmInference);
-
-impl Drop for SavePoint<'_> {
-    fn drop(&mut self) {
-        self.0.rollback().unwrap();
-    }
-}
-
-impl<C: SlmContext, F: SlmFormatter> SlmSimpleOracle<SlmSimpleInference<C>, F> {
-    /// Create a new `SlmSimpleChat` wrapping a raw [`SlmContext`].
-    pub fn new(context: C, formatter: F) -> Result<Self, InferenceError> {
-        let inference = SlmSimpleInference::new(context)?;
-        Ok(Self {
-            inference,
-            formatter,
-            max_answer_tokens: DEFAULT_MAX_ANSWER_TOKENS,
-            is_fresh_context: true,
-            active_turn: None,
-        })
-    }
-}
-
-impl<I: SlmInference, F: SlmFormatter> SlmSimpleOracle<I, F> {
-    /// Append the BOS token to `s` the very first time a prompt is built,
-    /// then mark the context as no longer fresh.
-    fn bos(&mut self, s: &mut String) {
-        if self.is_fresh_context {
-            if let Some(bos) = self.formatter.bos() {
-                s.push_str(bos);
-            }
-            self.is_fresh_context = false;
-        }
-    }
-}
-
-impl<I: SlmInference, F: SlmFormatter> SlmSimpleOracle<I, F> {
-    /// Build the formatted prompt fragment for `role`/`text` into `fragment`.
-    ///
-    /// Handles BOS injection, role-delimiter open/close sequencing, and the
-    /// two tool-embedding strategies ([`SlmToolStyle::Inline`] vs
-    /// [`SlmToolStyle::SeparateTurn`]).
-    fn prepare_prompt(
-        &mut self,
-        role: &SlmRole,
-        text: &str,
-        fragment: &mut String,
-    ) -> Result<(), InferenceError> {
-        self.bos(fragment);
-        match self.formatter.tool_style() {
-            SlmToolStyle::Inline => {
-                match role {
-                    SlmRole::System | SlmRole::User => {
-                        if self.active_turn == Some(SlmRole::Assistant) {
-                            fragment.push_str(&self.formatter.turn_end(&SlmRole::Assistant));
-                        }
-
-                        let role_clone = Some(role.clone());
-                        if self.active_turn != role_clone {
-                            if let Some(active_role) = &self.active_turn {
-                                fragment.push_str(&self.formatter.turn_end(active_role));
-                            }
-                            self.active_turn = role_clone;
-                            fragment.push_str(&self.formatter.turn_start(role));
-                        }
-                        fragment.push_str(text);
-                    }
-                    SlmRole::Assistant => {
-                        // if assistant turn is not active, start it
-                        if self.active_turn != Some(SlmRole::Assistant) {
-                            fragment.push_str(&self.formatter.turn_start(&SlmRole::Assistant));
-                            self.active_turn = Some(SlmRole::Assistant);
-                        }
-                        fragment.push_str(text);
-                    }
-                    SlmRole::Tool(tool_name) => {
-                        // restoring tool response from history
-                        // mast be in the assistant turn
-                        if self.active_turn != Some(SlmRole::Assistant) {
-                            fragment.push_str(&self.formatter.turn_start(&SlmRole::Assistant));
-                            self.active_turn = Some(SlmRole::Assistant);
-                        }
-                        fragment.push_str(&self.formatter.format_tool_response(tool_name, text));
-                    }
-                }
-            }
-            SlmToolStyle::SeparateTurn => {
-                if let Some(active_role) = &self.active_turn
-                    && active_role != role
-                {
-                    fragment.push_str(&self.formatter.turn_end(&active_role));
-                    fragment.push_str(&self.formatter.turn_start(&active_role));
-                }
-                if let SlmRole::Tool(tool_name) = role {
-                    fragment.push_str(&self.formatter.format_tool_response(tool_name, text));
-                } else {
-                    fragment.push_str(text);
-                }
-                self.active_turn = Some(role.clone());
-            }
-        }
-        Ok(())
-    }
-}
-
-impl<I: SlmInference, F: SlmFormatter> SlmOracle for SlmSimpleOracle<I, F> {
-    fn prompt(&mut self, role: &SlmRole, text: &str) -> Result<(), InferenceError> {
-        let mut fragment = String::new();
-        self.prepare_prompt(role, text, &mut fragment)?;
-        self.inference.prefill(&fragment)
-    }
-
-    fn generate(
-        &mut self,
-        role: &SlmRole,
-        text: &str,
         think: bool,
-        brake: Option<SlmBoxedBrakeFn>,
-    ) -> Result<SlmAnswer, InferenceError> {
-        let mut fragment = String::new();
+        text: &str,
+        braker: Option<SlmBoxedBrakeFn>
+    ) -> Result<Vec<T>, InferenceError>;
+}
 
-        if role == &SlmRole::Assistant || role == &SlmRole::System {
-            return Err(InferenceError::InvalidRole);
-        }
+impl<Oracle: SlmOracle + ?Sized> SlmJsonOracle for Oracle {
+    fn json_ask<T: DeserializeOwned + JsonSchema + 'static>(
+        &mut self,
+        think: bool,
+        text: &str,
+        braker: Option<SlmBoxedBrakeFn>
+    ) -> Result<Vec<T>, InferenceError> {
+        let mut constraint = self.json_constraint(TypeId::of::<T>(), &|| {
+            let schema = schemars::schema_for!(T);
+            serde_json::to_value(schema)
+                .map_err(|e| InferenceError::Error(format!("serde_json error: {e}")))
+        })?;
+        let answer = self.generate(
+            &SlmRole::User,
+            text,
+            think,
+            true,
+            braker,
+            Some(constraint.as_mut()),
+        )?;
 
-        self.prepare_prompt(role, text, &mut fragment)?;
+        serde_json::from_str(answer.as_str())
+            .map_err(|e| InferenceError::Error(format!("serde_json error: {e}")))
+    }
+}
 
-        if self.active_turn != Some(SlmRole::Assistant) {
-            fragment.push_str(&self.formatter.turn_end(role));
-            fragment.push_str(&self.formatter.turn_start(&SlmRole::Assistant));
-            self.active_turn = Some(SlmRole::Assistant);
-        }
-
-        if think {
-            fragment.push_str(self.formatter.reasoning_trigger().unwrap_or(""));
-        }
-
-        self.inference.save()?;
-        let _ = SavePoint(&mut self.inference);
-        self.inference.prefill(&fragment)?;
-        let mut answer = self
-            .inference
-            .generate_until(&mut [brake, Some(SlmBrake::token_limit(self.max_answer_tokens))])?;
-        if think {
-            answer =
-                answer.map(|s| self.formatter.reasoning_trigger().unwrap_or("").to_string() + &s);
-        }
-        Ok(answer.split_thought(&self.formatter))
+pub struct Unconstrained;
+impl SlmConstraint for Unconstrained {
+    fn mask(&mut self, _logits: &mut [f32]) -> Result<bool, SamplingError> {
+        Ok(true)
     }
 
-    fn clear(&mut self) -> Result<(), InferenceError> {
-        self.is_fresh_context = true;
-        self.active_turn = None;
-        self.inference.clear()
+    fn forward(&mut self, _token_id: i32) -> Result<SlmConstraintStep, SamplingError> {
+        Ok(SlmConstraintStep::Forward)
+    }
+
+    fn prefill(&mut self, _text: &str) -> Result<(), SamplingError> {
+        Ok(())
     }
 }

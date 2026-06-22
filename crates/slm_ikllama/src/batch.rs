@@ -1,15 +1,26 @@
-use slm_inference::SlmPos;
+use slm_inference::{SlmPos, SlmToken};
 use slm_inference::errors::BatchError;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Token(slm_ikllama_sys::llama_token);
 
-impl slm_inference::SlmToken for Token {
+impl SlmToken for Token {
     fn as_i32(&self) -> i32 {
         self.0
     }
+    fn from_i32(i: i32) -> Self {
+        Self(i)
+    }
 }
+
+impl Token {
+    #[allow(dead_code)]
+    pub(crate) fn token(&self) -> slm_ikllama_sys::llama_token {
+        self.0
+    }
+}
+
 
 impl From<i32> for Token {
     fn from(value: i32) -> Self {

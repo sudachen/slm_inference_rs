@@ -27,6 +27,10 @@ impl SlmAnswer {
         }
     }
 
+    pub fn text(&self) -> &str {
+        self.as_str()
+    }
+
     pub fn fork_id(&self) -> usize {
         match self {
             SlmAnswer::Complete(_, id, _)

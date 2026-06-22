@@ -24,14 +24,11 @@ impl SlmFormatter for Qwen25Formatter {
             SlmRole::System => "<|im_start|>system\n".to_string(),
             SlmRole::User => "<|im_start|>user\n".to_string(),
             SlmRole::Assistant => "<|im_start|>assistant\n".to_string(),
-            // Tools use Inline style, so no prefix here
-            SlmRole::Tool(_) => String::new(),
         }
     }
 
     fn turn_end(&self, role: &SlmRole) -> String {
         match role {
-            SlmRole::Tool(_) => String::new(),
             // Every ChatML container closes the same way, plus \n to keep history clean
             _ => "<|im_end|>\n".to_string(),
         }

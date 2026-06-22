@@ -16,6 +16,7 @@ readme = "README.md"
 slm_ikllama_sys = { path = "../slm_ikllama_sys", version = "^0.1.1" }
 slm_inference = { path = "../../slm_inference", version = "^0.1.1" }
 tracing = { workspace = true }
+toktrie = "1.7.6"
 
 [features]
 cuda = ["slm_ikllama_sys/cuda"]
