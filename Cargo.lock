@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "epubscan"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "quick-xml 0.39.4",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "fb2scan"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "fb2",
@@ -2083,15 +2083,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
-name = "slm_guidance"
-version = "0.1.4"
-dependencies = [
- "llguidance",
-]
-
-[[package]]
 name = "slm_ikllama"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "slm_ikllama_sys",
  "slm_inference",
@@ -2101,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "slm_ikllama_sys"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bindgen",
  "cc",
@@ -2113,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "slm_inference"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -2128,7 +2121,7 @@ dependencies = [
 
 [[package]]
 name = "slm_llama"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "llama-cpp-sys-2",
  "slm_inference",
