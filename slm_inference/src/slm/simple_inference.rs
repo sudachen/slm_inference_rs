@@ -13,7 +13,6 @@ use tracing::error;
 struct ContextState {
     id: u64,
     state: Vec<u8>,
-    pos: Pos,
     n_cur: usize,
     seq_id: usize,
 }
@@ -31,6 +30,7 @@ struct InferenceCore<C: Context + Send> {
 }
 
 impl<C: Context + Send> InferenceCore<C> {
+    /// Create a new inference core wrapping the given context.
     pub fn new(context: C) -> Result<Arc<Mutex<Self>>, InferenceError> {
         let n_batch = context.max_batch_len();
         let batch = context.new_batch(n_batch, 1)?;
@@ -43,13 +43,13 @@ impl<C: Context + Send> InferenceCore<C> {
         })))
     }
 
+    /// Allocate a new state ID for multi-fork inference.
     pub fn allocate(&mut self) -> u64 {
         let id = self.id_counter;
         self.id_counter += 1;
         let state = ContextState {
             id,
             state: vec![],
-            pos: Pos::new(0, 0),
             n_cur: 0,
             seq_id: 0,
         };
@@ -57,12 +57,44 @@ impl<C: Context + Send> InferenceCore<C> {
         id
     }
 
-    pub fn clear(&mut self, state_id: u64) {
-        todo!()
+    /// Clear the context state for the given state ID.
+    pub fn clear(&mut self, state_id: u64) -> Result<(), InferenceError> {
+        if self.state.id == state_id {
+            self.context.clear()?;
+            self.state.n_cur = 0;
+        }
+        self.store.remove(&state_id);
+        Ok(())
     }
 
+    /// Set the current active state by ID, restoring from cache if necessary.
     pub fn set_current_state(&mut self, state_id: u64) -> Result<(), InferenceError> {
-        // TODO: dump/save
+        if self.state.id == state_id {
+            return Ok(());
+        }
+        let dump = self.context.dump(0)?;
+        self.store.insert(
+            self.state.id,
+            ContextState {
+                state: dump,
+                ..self.state
+            },
+        );
+        let new_state = self
+            .store
+            .get(&state_id)
+            .ok_or(InferenceError::InconsistentState(
+                "state not found".to_string(),
+            ))?;
+        if new_state.n_cur > 0 {
+            self.context.restore(0, new_state.state.as_slice())?;
+        } else {
+            self.context.clear()?;
+        }
+        self.state = ContextState {
+            state: vec![],
+            ..*new_state
+        };
         Ok(())
     }
 
@@ -74,6 +106,11 @@ impl<C: Context + Send> InferenceCore<C> {
         n_cur: usize,
     ) -> Result<usize, InferenceError> {
         self.set_current_state(state_id)?;
+        if self.state.n_cur < n_cur {
+            return Err(InferenceError::InconsistentState(
+                "state n_cur is too small".to_string(),
+            ));
+        }
         if self.state.n_cur > n_cur {
             if self.context.edit_level() >= EditLevel::Cut {
                 self.state.n_cur = self
@@ -127,6 +164,14 @@ pub struct SimpleInference<C: Context + Send> {
     tokens: Vec<i32>,
     vocab: BoxedVocab,
     zone: ComputationZone,
+}
+
+impl<C: Context + Send> Drop for SimpleInference<C> {
+    fn drop(&mut self) {
+        if let Err(e) = self.context.lock().unwrap().clear(self.state_id) {
+            error!("Failed to clear inference context state: {}", e);
+        }
+    }
 }
 
 impl<C: Context + Send> SimpleInference<C> {

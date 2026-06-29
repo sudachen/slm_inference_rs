@@ -106,10 +106,10 @@ pub trait Context {
 
     /// Serialises the full context state (KV cache, sampler state, etc.) to a byte
     /// buffer so it can be persisted or transferred.
-    fn dump(&mut self) -> Result<Vec<u8>, ContextError>;
+    fn dump(&mut self, fork_id: usize) -> Result<Vec<u8>, ContextError>;
 
     /// Restores a context state previously produced by [`dump`](Self::dump).
-    fn restore(&mut self, data: Vec<u8>) -> Result<(), ContextError>;
+    fn restore(&mut self, fork_id: usize, data: &[u8]) -> Result<(), ContextError>;
 
     /// Reports which in-place editing operations this context supports.
     ///

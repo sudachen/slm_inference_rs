@@ -10,6 +10,10 @@ pub struct MistralFormatter {
     thinking: bool,
 }
 
+/// Selects the exact Mistral chat-template variant to use.
+///
+/// Different Mistral releases use different token sequences for system messages
+/// and tool calls, necessitating per-flavor formatting.
 pub enum MistralFlavor {
     /// For Mistral-Nemo, Mistral Large 2, and 7B v0.3 (Tekken / v3 tokenizer)
     /// Has native tokens for system and tools.
@@ -19,6 +23,7 @@ pub enum MistralFlavor {
 }
 
 impl MistralFormatter {
+    /// Create a new Mistral formatter with the specified flavor and reasoning support.
     pub fn new(flavor: MistralFlavor, thinking: bool) -> Self {
         Self { flavor, thinking }
     }

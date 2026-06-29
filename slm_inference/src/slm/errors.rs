@@ -91,8 +91,10 @@ pub enum InferenceError {
     IncompleteAnswer,
     #[error("Invalid JSON")]
     InvalidJson,
-    #[error("Invalid JSON Schema")]
+    #[error("Invalid JSON Schema: {0}")]
     InvalidJsonSchema(String),
+    #[error("Inconsistent State: {0}")]
+    InconsistentState(String),
 }
 
 /// Errors that can occur while loading a GGUF model file.

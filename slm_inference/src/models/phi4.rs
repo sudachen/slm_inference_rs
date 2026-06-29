@@ -10,6 +10,7 @@ pub struct Phi4Formatter {
 }
 
 impl Phi4Formatter {
+    /// Create a new Phi-4 formatter with reasoning support.
     pub fn new(thinking: bool) -> Self {
         Self { thinking }
     }

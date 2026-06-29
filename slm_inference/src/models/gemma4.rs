@@ -23,6 +23,7 @@ pub enum Gemma4Flavor {
 }
 
 impl GemmaFormatter {
+    /// Create a new Gemma formatter with the specified flavor and reasoning support.
     pub fn new(flavor: Gemma4Flavor, thinking: bool) -> Self {
         Self { flavor, thinking }
     }

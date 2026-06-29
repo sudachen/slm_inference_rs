@@ -10,6 +10,7 @@ pub struct Qwen25Formatter {
 }
 
 impl Qwen25Formatter {
+    /// Create a new Qwen 2.5 formatter with reasoning support.
     pub fn new(thinking: bool) -> Self {
         Self { thinking }
     }
