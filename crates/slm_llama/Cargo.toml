@@ -1,6 +1,6 @@
 [package]
 name = "slm_llama"
-version = "0.1.4"
+version = "0.1.6"
 
 description = "llama.cpp backend for slm_inference"
 

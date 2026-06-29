@@ -2083,7 +2083,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slm_ikllama"
-version = "0.1.4"
+version = "0.1.6"
 dependencies = [
  "slm_ikllama_sys",
  "slm_inference",
@@ -2105,7 +2105,7 @@ dependencies = [
 
 [[package]]
 name = "slm_inference"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "hf-hub",
@@ -2121,7 +2121,7 @@ dependencies = [
 
 [[package]]
 name = "slm_llama"
-version = "0.1.4"
+version = "0.1.6"
 dependencies = [
  "llama-cpp-sys-2",
  "slm_inference",
