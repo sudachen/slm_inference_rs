@@ -9,7 +9,7 @@ members = [
 [workspace.package]
 authors = ["Alexey Sudachen"]
 edition = "2024"
-version = "0.1.3"
+version = "0.1.4"
 homepage = "https://github.com/sudachen/slm_inference_rs"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sudachen/slm_inference_rs"

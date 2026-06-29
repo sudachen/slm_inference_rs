@@ -1,6 +1,6 @@
 [package]
 name = "slm_ikllama"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2024"
 
 description = "ik_llama.cpp backend for slm_inference"
