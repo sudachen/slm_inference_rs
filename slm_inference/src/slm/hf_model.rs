@@ -1,15 +1,15 @@
-use std::path::PathBuf;
 use hf_hub::api::sync::ApiBuilder;
+use std::path::PathBuf;
 use tracing::debug;
 
+use super::{Model, ModelConfig};
 use anyhow::Context as _;
-use super::{ModelConfig,Model};
 
 /// Specification for a HuggingFace model to download and load.
 ///
 /// Provides a convenient way to reference models by their repository ID and filename,
 /// with automatic download from the HuggingFace Hub if not locally cached.
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct HfModel {
     /// HuggingFace repository identifier (e.g. `"bartowski/Llama-3.2-3B-Instruct-GGUF"`).
     pub repo: &'static str,

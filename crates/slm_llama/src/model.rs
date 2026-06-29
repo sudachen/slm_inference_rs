@@ -1,12 +1,12 @@
-use crate::context::Builder;
 use crate::LlamaModelPtr;
+use crate::context::Builder;
+use slm_inference::slm;
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use slm_inference::slm;
 
 #[derive(Clone)]
-pub struct Model{
+pub struct Model {
     ptr: LlamaModelPtr,
     pub zone: slm::ComputationZone,
 }
@@ -119,7 +119,6 @@ pub enum SplitMode {
 }
 
 impl slm::ModelConfig for ModelConfig {
-
     #[inline(never)]
     #[allow(refining_impl_trait)]
     fn load_gguf(self, path: impl AsRef<Path>) -> Result<Model, slm::GgufLoaderError> {
@@ -127,7 +126,7 @@ impl slm::ModelConfig for ModelConfig {
         let path_ref = path.as_ref();
         let path = path_ref.to_str().ok_or(slm::GgufLoaderError::InvalidPath)?;
         let model = self.load_llama_model(path)?;
-        Ok(Model{
+        Ok(Model {
             ptr: LlamaModelPtr::new(model),
             zone: if self.params.n_gpu_layers > 0 {
                 slm::ComputationZone::GPU

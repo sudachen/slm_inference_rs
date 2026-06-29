@@ -7,14 +7,14 @@
 //! - [`json_schema_to_lark`] - Converts JSON schemas to Lark grammars
 //! - [`ParserRegistry`] - Caches compiled parsers keyed by Rust type ID
 
-use std::any::TypeId;
-use std::collections::HashMap;
-use llguidance::{Constraint, ParserFactory, TokenParser};
+use super::{Constraint as SlmConstraint, ConstraintStep, SamplingError};
 use llguidance::api::TopLevelGrammar;
 use llguidance::earley::SlicedBiasComputer;
 use llguidance::toktrie::{InferenceCapabilities, TokEnv};
+use llguidance::{Constraint, ParserFactory, TokenParser};
 use serde_json::Value;
-use super::{ConstraintStep, Constraint as SlmConstraint, SamplingError};
+use std::any::TypeId;
+use std::collections::HashMap;
 
 /// A [`Constraint`] that enforces a Lark grammar during token sampling.
 ///
@@ -75,10 +75,13 @@ impl SlmConstraint for LarkConstraint {
     fn prefill(&mut self, text: &str) -> Result<(), SamplingError> {
         let tokens = self.tok_env.tokenize_special(text);
         for t in tokens.into_iter() {
-            self.constraint.compute_mask().
-                map_err(|e| SamplingError::Error(e.to_string()))?;
-            let _s = self.constraint.commit_token(Some(t)).
-                map_err(|e| SamplingError::Error(e.to_string()))?;
+            self.constraint
+                .compute_mask()
+                .map_err(|e| SamplingError::Error(e.to_string()))?;
+            let _s = self
+                .constraint
+                .commit_token(Some(t))
+                .map_err(|e| SamplingError::Error(e.to_string()))?;
         }
         Ok(())
     }
@@ -88,14 +91,17 @@ impl SlmConstraint for LarkConstraint {
 ///
 /// The grammar enforces that the model output must match one of the provided variants.
 /// If `reasoning_bounds` is provided, the grammar allows optional reasoning content.
-pub fn variants_to_lark(variants: Vec<String>, reasoning_bounds: Option<(String,String)>) -> Result<String, &'static str> {
+pub fn variants_to_lark(
+    variants: Vec<String>,
+    reasoning_bounds: Option<(String, String)>,
+) -> Result<String, &'static str> {
     if variants.is_empty() {
         return Err("The variants list must have at least one variant defined");
     }
 
     let mut lark_rules = Vec::new();
 
-    if let Some((start, end)) = &reasoning_bounds.as_ref().map(|(a,b)| (a.trim(), b.trim())) {
+    if let Some((start, end)) = &reasoning_bounds.as_ref().map(|(a, b)| (a.trim(), b.trim())) {
         lark_rules.push("start: [thinking] WS? enum_value WS?".to_string());
         lark_rules.push(format!("thinking: \"{}\" /(?s).*?/ \"{}\"", start, end));
     } else {
@@ -116,20 +122,22 @@ pub fn variants_to_lark(variants: Vec<String>, reasoning_bounds: Option<(String,
     Ok(lark_rules.join("\n"))
 }
 
-
 /// Convert a JSON object schema into a Lark grammar for constrained generation.
 ///
 /// The grammar enforces that the model output must be a JSON array of objects
 /// matching the provided schema. If `reasoning_bounds` is provided, the grammar
 /// allows optional reasoning content before the JSON array.
-pub fn json_schema_to_lark(schema: Value, reasoning_bounds: Option<(String,String)>) -> Result<String, &'static str> {
+pub fn json_schema_to_lark(
+    schema: Value,
+    reasoning_bounds: Option<(String, String)>,
+) -> Result<String, &'static str> {
     // Validate that the provided schema represents a JSON object (struct element)
     if schema.get("type").and_then(|t| t.as_str()) != Some("object") {
         return Err("The input schema must be of type 'object' (the array element definition)");
     }
 
     let mut lark_rules = Vec::new();
-    if let Some((start, end)) = reasoning_bounds.as_ref().map(|(a,b)| (a.trim(), b.trim())) {
+    if let Some((start, end)) = reasoning_bounds.as_ref().map(|(a, b)| (a.trim(), b.trim())) {
         lark_rules.push("start: [thinking] json_array".to_string());
         lark_rules.push(format!("thinking: \"{}\" /(?s).*?/ \"{}\"", start, end));
     } else {
@@ -143,7 +151,8 @@ pub fn json_schema_to_lark(schema: Value, reasoning_bounds: Option<(String,Strin
     lark_rules.push("json_array: \"[\" WS? card (WS? \",\" WS? card)* WS? \"]\"".to_string());
 
     // Extract the properties of the object
-    let properties = schema.get("properties")
+    let properties = schema
+        .get("properties")
         .and_then(|p| p.as_object())
         .ok_or("Missing or invalid 'properties' block in the schema")?;
 
@@ -156,9 +165,9 @@ pub fn json_schema_to_lark(schema: Value, reasoning_bounds: Option<(String,Strin
         // Basic type mapping for the value regex
         let val_rule = match field_info.get("type").and_then(|t| t.as_str()) {
             Some("integer") => "/[0-9]+/",
-            Some("number")  => "/-?[0-9]+(\\.[0-9]+)?/",
+            Some("number") => "/-?[0-9]+(\\.[0-9]+)?/",
             Some("boolean") => "\"true\" | \"false\"",
-            _               => "/\"[^\"\\\\]*\"/",
+            _ => "/\"[^\"\\\\]*\"/",
         };
 
         // Format: "field_name" WS? ":" WS? value_regex
@@ -214,8 +223,12 @@ impl ParserRegistry {
     pub fn factory(&mut self) -> Result<&ParserFactory, SamplingError> {
         if self.factory.is_none() {
             self.factory = Some(
-                ParserFactory::new(&self.tok_env, self.caps.clone(), &SlicedBiasComputer::general_slices())
-                    .map_err(|x| SamplingError::Error(format!("llguidance factory error: {x}")))?,
+                ParserFactory::new(
+                    &self.tok_env,
+                    self.caps.clone(),
+                    &SlicedBiasComputer::general_slices(),
+                )
+                .map_err(|x| SamplingError::Error(format!("llguidance factory error: {x}")))?,
             );
         }
         Ok(self.factory.as_ref().unwrap())

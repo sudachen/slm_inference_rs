@@ -1,10 +1,10 @@
 use super::{
     BatchError, BoxedVocab, Constraint, ContextBuilderError, ContextError, DecodeError, Pos,
-    SamplingError
+    SamplingError,
 };
 
 /// Hardware zone where inference computation is performed.
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ComputationZone {
     /// Computation on CPU.
     CPU,

@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use super::{Batch, Model, vocab::Tokenizer};
 use slm_inference::slm;
 use slm_inference::slm::ComputationZone;
+use std::sync::Arc;
 
 unsafe impl Send for Context {}
 
@@ -51,7 +51,11 @@ impl slm::Context for Context {
     }
 
     #[inline(never)]
-    fn sample_with_constraint(&mut self, logit_idx: usize, constraint: Option<&mut dyn slm::Constraint>) -> Result<Option<i32>, slm::SamplingError> {
+    fn sample_with_constraint(
+        &mut self,
+        logit_idx: usize,
+        constraint: Option<&mut dyn slm::Constraint>,
+    ) -> Result<Option<i32>, slm::SamplingError> {
         unsafe {
             let ctx = self.ctx.get_ptr();
             // TODO: validate logit_idx
@@ -119,7 +123,11 @@ impl slm::Context for Context {
     }
 
     #[inline(never)]
-    fn cut(&mut self, start_pos: &slm::Pos, end_pos: &slm::Pos) -> Result<slm::Pos, slm::ContextError> {
+    fn cut(
+        &mut self,
+        start_pos: &slm::Pos,
+        end_pos: &slm::Pos,
+    ) -> Result<slm::Pos, slm::ContextError> {
         if start_pos.fork_id != end_pos.fork_id {
             return Err(slm::ContextError::Error(
                 "positions must have the same fork_id".to_string(),
@@ -251,7 +259,11 @@ impl slm::ContextBuilder<Context> for Builder {
         let n_vocab = unsafe { slm_ikllama_sys::llama_n_vocab(model_ptr) } as usize;
 
         let ctx = super::LlamaContextPtr::new(ctx);
-        let vocab = Arc::new(slm::SimpleVocab::new(Tokenizer::new(ctx.clone(), n_vocab, model_ptr)));
+        let vocab = Arc::new(slm::SimpleVocab::new(Tokenizer::new(
+            ctx.clone(),
+            n_vocab,
+            model_ptr,
+        )));
         // TODO: decide by arch from model metadata
         let edit_level = slm::EditLevel::Cut;
 
@@ -266,7 +278,6 @@ impl slm::ContextBuilder<Context> for Builder {
             top_p: self.top_p,
             model: self.model,
             vocab,
-
         })
     }
 

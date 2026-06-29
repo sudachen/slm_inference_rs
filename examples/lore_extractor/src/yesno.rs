@@ -9,8 +9,8 @@ use slm_inference::slm;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use strum::{AsRefStr, EnumString, VariantNames};
 use tracing::{debug, error};
-use strum::{VariantNames,EnumString,AsRefStr};
 
 #[derive(Debug, VariantNames, EnumString, AsRefStr, Deserialize, Eq, PartialEq)]
 pub enum YesOrNo {
@@ -69,12 +69,16 @@ impl YesNo {
             let question = q.question;
             let no = no + 1;
             println!("Question {no}: {question}");
-            let answer : slm::Answer<YesOrNo> = assistant.choose(self.think, &question, None)?;
+            let answer: slm::Answer<YesOrNo> = assistant.choose(self.think, &question, None)?;
             let t = answer.thought().unwrap_or("");
             if t.len() > 0 {
                 println!("-\n{t}\n-");
             }
-            println!("E {question} -> {:?} ?= {:?}\n-=-", answer.value(), q.answer);
+            println!(
+                "E {question} -> {:?} ?= {:?}\n-=-",
+                answer.value(),
+                q.answer
+            );
             if answer.value() != &q.answer {
                 error!("failed to answer question {no} : {question}");
             }

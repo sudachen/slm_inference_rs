@@ -1,10 +1,10 @@
+use backend::{BackendId, ModelId, selector};
 use clap::{Parser, Subcommand};
-use backend::{selector, BackendId, ModelId};
 
 //mod yesno;
+mod ents;
 mod sayhi;
 mod yesno;
-mod ents;
 
 fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt()
@@ -33,9 +33,8 @@ pub struct Cli {
     pub backend: BackendId,
     #[arg(short, long, default_value_t = ModelId::default(), global=true)]
     pub model: ModelId,
-    #[arg(long, global=true)]
+    #[arg(long, global = true)]
     pub cpu: bool,
-
 }
 
 #[derive(Subcommand, Debug)]

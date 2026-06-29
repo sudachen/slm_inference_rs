@@ -1,6 +1,6 @@
+use super::{SamplingError, StringToTokenError, TokenToStringError};
 use std::any::TypeId;
 use std::sync::Arc;
-use super::{SamplingError, StringToTokenError, TokenToStringError};
 
 /// Type alias for a boxed [`Vocab`] trait object with thread-safety guarantees.
 pub type BoxedVocab = Arc<dyn Vocab + Send + Sync>;
@@ -20,7 +20,6 @@ pub enum ConstraintStep {
     /// Terminate generation immediately; the constraint has been fully satisfied.
     Stop,
 }
-
 
 /// Token-level filter applied during autoregressive sampling.
 ///
@@ -69,7 +68,6 @@ impl Constraint for Unconstrained {
     }
 }
 
-
 /// Vocabulary operations: encoding strings to tokens and decoding tokens to bytes.
 ///
 /// A vocabulary is accessible through [`Context::vocab`].  The method
@@ -81,11 +79,7 @@ pub trait Vocab {
     ///
     /// `special` – render special tokens as text instead of skipping them.
     /// `left_strip` – if `Some(n)`, strip up to `n` leading space bytes from the result.
-    fn token_to_bytes(
-        &self,
-        token: i32,
-        special: bool,
-    ) -> Result<Vec<u8>, TokenToStringError>;
+    fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError>;
     /// Tokenise a UTF-8 string into a sequence of model token IDs.
     ///
     /// `add_special` – prepend/append BOS/EOS markers as required by the model.
@@ -100,15 +94,17 @@ pub trait Vocab {
     fn json_constraint(
         &self,
         _type_id: TypeId,
-        _json_schema: &dyn Fn() -> Result<(serde_json::Value,Option<(String,String)>), SamplingError>,
-
+        _json_schema: &dyn Fn() -> Result<
+            (serde_json::Value, Option<(String, String)>),
+            SamplingError,
+        >,
     ) -> Result<BoxedConstraint, SamplingError> {
         Ok(Box::new(Unconstrained))
     }
     fn enum_constraint(
         &self,
         _type_id: TypeId,
-        _variants: &dyn Fn() -> Result<(Vec<String>,Option<(String,String)>), SamplingError>,
+        _variants: &dyn Fn() -> Result<(Vec<String>, Option<(String, String)>), SamplingError>,
     ) -> Result<BoxedConstraint, SamplingError> {
         Ok(Box::new(Unconstrained))
     }
@@ -132,7 +128,12 @@ impl Vocab for NullVocab {
         Err(TokenToStringError::Unsupported)
     }
 
-    fn str_to_tokens(&self, _str: &str, _add_special: bool, _parse_special: bool) -> Result<Vec<i32>, StringToTokenError> {
+    fn str_to_tokens(
+        &self,
+        _str: &str,
+        _add_special: bool,
+        _parse_special: bool,
+    ) -> Result<Vec<i32>, StringToTokenError> {
         Err(StringToTokenError::Unsupported)
     }
 }

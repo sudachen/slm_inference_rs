@@ -1,6 +1,6 @@
 use super::{
-    Action, Answer, BoxedAction, BoxedConstraint, ComputationZone, InferenceError,
-    NullInference, Assistant, Role, SavePoint,
+    Action, Answer, Assistant, BoxedAction, BoxedConstraint, ComputationZone, InferenceError,
+    NullInference, Role, SavePoint,
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;

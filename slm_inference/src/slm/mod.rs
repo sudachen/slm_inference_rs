@@ -10,32 +10,32 @@
 //! - [`Inference`] trait for generation engines
 //! - [`Constraint`] for structured output generation
 
-pub mod context;
-pub mod vocab;
-pub mod model;
 pub mod answer;
-pub mod formatter;
-pub mod inference;
-pub mod simple_inference;
 pub mod assistant;
-pub mod hf_model;
+pub mod context;
 pub mod errors;
+pub mod formatter;
+pub mod hf_model;
+pub mod inference;
+pub mod model;
+pub mod simple_inference;
+pub mod vocab;
 
+mod async_assistant;
 mod llg_lark;
 mod simple_vocab;
-mod async_assistant;
 
-pub use context::*;
-pub use vocab::*;
-pub use formatter::*;
-pub use model::*;
 pub use answer::*;
-pub use inference::*;
-pub use simple_inference::*;
 pub use assistant::*;
-pub use simple_vocab::*;
-pub use hf_model::*;
+pub use context::*;
 pub use errors::*;
+pub use formatter::*;
+pub use hf_model::*;
+pub use inference::*;
+pub use model::*;
+pub use simple_inference::*;
+pub use simple_vocab::*;
+pub use vocab::*;
 //pub use async_assistant::*;
 
 /// Position in the KV cache identified by token index and fork ID.

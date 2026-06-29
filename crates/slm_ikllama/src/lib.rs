@@ -4,11 +4,11 @@ mod context;
 mod model;
 mod vocab;
 
-pub use batch::{Batch};
+pub use batch::Batch;
 pub use context::{Builder, Context, KVType};
 pub use model::{Model, ModelConfig};
 
-use slm_inference::core::{Free,SharedPtr};
+use slm_inference::core::{Free, SharedPtr};
 
 #[derive(Clone)]
 pub struct LlamaContextFree;
@@ -31,4 +31,3 @@ impl Free<slm_ikllama_sys::llama_model> for LlamaModelFree {
 }
 
 pub type LlamaModelPtr = SharedPtr<slm_ikllama_sys::llama_model, LlamaModelFree>;
-

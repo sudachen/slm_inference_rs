@@ -1,11 +1,13 @@
-use slm_inference::slm::{VobTokenizer, SimpleTokEnv, FfiError, StringToTokenError, TokenToStringError};
+use slm_inference::slm::{
+    FfiError, SimpleTokEnv, StringToTokenError, TokenToStringError, VobTokenizer,
+};
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::sync::{Arc, OnceLock};
 use toktrie::TokEnv;
 
-unsafe impl Send for Tokenizer{}
-unsafe impl Sync for Tokenizer{}
+unsafe impl Send for Tokenizer {}
+unsafe impl Sync for Tokenizer {}
 
 pub struct Tokenizer {
     tok_env: OnceLock<TokEnv>,
@@ -16,7 +18,11 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
-    pub fn new(ctx_holder: super::LlamaContextPtr, vocab_size: usize, model_ptr: *const slm_ikllama_sys::llama_model ) -> Self {
+    pub fn new(
+        ctx_holder: super::LlamaContextPtr,
+        vocab_size: usize,
+        model_ptr: *const slm_ikllama_sys::llama_model,
+    ) -> Self {
         Self {
             tok_env: OnceLock::new(),
             vocab_size,
@@ -27,13 +33,8 @@ impl Tokenizer {
 }
 
 impl VobTokenizer for Tokenizer {
-
     #[inline(never)]
-    fn token_to_bytes(
-        &self,
-        token: i32,
-        special: bool,
-    ) -> Result<Vec<u8>, TokenToStringError> {
+    fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError> {
         let mut buf: Vec<u8> = vec![0u8; 128];
         let len = buf.len() as c_int;
         let size = unsafe {
@@ -123,7 +124,9 @@ impl VobTokenizer for Tokenizer {
             let tok_eos = unsafe { slm_ikllama_sys::llama_vocab_eos(vocab_ptr) } as u32;
             let mut words = Vec::with_capacity(vocab_size);
             for i in 0..vocab_size {
-                let k = self.token_to_bytes(i as i32,true).unwrap_or_else(|_|vec![]);
+                let k = self
+                    .token_to_bytes(i as i32, true)
+                    .unwrap_or_else(|_| vec![]);
                 if k.starts_with(b"<unused") {
                     words.push(vec![]);
                 } else {
@@ -131,15 +134,11 @@ impl VobTokenizer for Tokenizer {
                     last_used = i;
                 }
             }
-            words.truncate(last_used+1);
+            words.truncate(last_used + 1);
             Arc::new(SimpleTokEnv::new(tok_eos, &words))
         })
-
     }
 }
-
-
-
 
 // use std::ffi::CString;
 // use std::os::raw::{c_char, c_int};
@@ -147,13 +146,13 @@ impl VobTokenizer for Tokenizer {
 // use slm_inference::errors::{FfiError, StringToTokenError, TokenToStringError};
 // use slm_inference::{SlmSimpleTokEnv, SlmToken, SlmVocab, SlmTokEnv};
 // use crate::batch::Token;
-// 
+//
 // pub struct Vocab {
 //     tokenv: OnceLock<toktrie::TokEnv>,
 //     vocab_ptr: *const slm_ikllama_sys::llama_vocab,
 //     model_ptr: *const slm_ikllama_sys::llama_model,
 // }
-// 
+//
 // impl Vocab {
 //     #[inline(never)]
 //     pub fn new(model_ptr: *const slm_ikllama_sys::llama_model, vocab_ptr: *const slm_ikllama_sys::llama_vocab) -> Self {
@@ -164,15 +163,15 @@ impl VobTokenizer for Tokenizer {
 //         }
 //     }
 // }
-// 
+//
 // impl SlmVocab for Vocab {
 //     type Token = Token;
-// 
+//
 //     #[inline(never)]
 //     fn vocab_size(&self) -> usize {
 //         unsafe { slm_ikllama_sys::llama_vocab_n_tokens(self.vocab_ptr) as usize }
 //     }
-// 
+//
 //     #[inline(never)]
 //     fn token_to_bytes(&self, token: Self::Token, special: bool, left_strip: Option<usize>) -> Result<Vec<u8>, TokenToStringError> {
 //         let mut buf: Vec<u8> = vec![0u8; 128];
@@ -190,7 +189,7 @@ impl VobTokenizer for Tokenizer {
 //                 special,
 //             )
 //         };
-// 
+//
 //         match size {
 //             0 => Ok(vec![]),
 //             i if i.is_negative() => Err(TokenToStringError::InsufficientBufferSpace(i)),
@@ -201,7 +200,7 @@ impl VobTokenizer for Tokenizer {
 //             }
 //         }
 //     }
-// 
+//
 //     #[inline(never)]
 //     fn str_to_tokens(&self, str: &str, add_special: bool, parse_special: bool) -> Result<Vec<Self::Token>, StringToTokenError> {
 //         let add_bos = match add_special {
@@ -213,10 +212,10 @@ impl VobTokenizer for Tokenizer {
 //         let c_string = CString::new(str).map_err(|_| FfiError::CstAllocationError)?;
 //         let buffer_capacity =
 //             c_int::try_from(buffer.capacity()).map_err(|_| FfiError::CintConversionError)?;
-// 
+//
 //         let text_len = c_int::try_from(c_string.as_bytes().len())
 //             .map_err(|_| FfiError::CintConversionError)?;
-// 
+//
 //         let size = unsafe {
 //             slm_ikllama_sys::llama_tokenize(
 //                 self.model_ptr,
@@ -228,7 +227,7 @@ impl VobTokenizer for Tokenizer {
 //                 parse_special,
 //             )
 //         };
-// 
+//
 //         // if we fail the first time we can resize the vector to the correct size and try again. This should never fail.
 //         // as a result - size is guaranteed to be positive here.
 //         let size = if size.is_negative() {
@@ -247,14 +246,14 @@ impl VobTokenizer for Tokenizer {
 //         } else {
 //             size
 //         };
-// 
+//
 //         let size = usize::try_from(size).expect("size is positive and usize ");
-// 
+//
 //         // Safety: `size` < `capacity` and llama-cpp has initialized elements up to `size`
 //         unsafe { buffer.set_len(size) }
 //         Ok(buffer)
 //     }
-// 
+//
 //     #[inline(never)]
 //     fn tok_env(&self) -> &SlmTokEnv {
 //         self.tokenv.get_or_init(|| {

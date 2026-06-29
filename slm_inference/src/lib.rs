@@ -7,6 +7,6 @@
 //! - [`models`] - Model-specific chat-template formatters
 //! - [`core`] - Low-level utilities (RAII smart pointers for FFI)
 
-pub mod slm;
-pub mod models;
 pub mod core;
+pub mod models;
+pub mod slm;

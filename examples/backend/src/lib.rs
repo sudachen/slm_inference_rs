@@ -1,6 +1,6 @@
 use anyhow::Result;
-use clap::{ValueEnum};
-use slm_inference::{slm, slm::Model, slm::ContextBuilder};
+use clap::ValueEnum;
+use slm_inference::{slm, slm::ContextBuilder, slm::Model};
 use strum::Display;
 
 #[allow(unused)]
@@ -9,13 +9,9 @@ pub fn setup_backend(
     model_info: slm::HfModel,
 ) -> Result<slm::Assistant> {
     let model = model_info.load(config)?;
-    let mut builder = model
-        .context()
-        .with_n_ctx(20000)
-        .with_sampler(0.3, 20, 0.9);
+    let mut builder = model.context().with_n_ctx(20000).with_sampler(0.3, 20, 0.9);
     if model_info.formatter != "phi4" {
-        builder = builder
-            .with_gen_type_kv(slm::KvType::Q6, slm::KvType::Q6)
+        builder = builder.with_gen_type_kv(slm::KvType::Q6, slm::KvType::Q6)
     }
     let context = builder.build()?;
     Ok(slm::Assistant::new(
@@ -49,28 +45,23 @@ pub fn select_model(model: ModelId) -> slm::HfModel {
     }
 }
 
-pub fn selector(
-    model: ModelId,
-    backend: BackendId,
-    cpu: bool,
-) -> Result<slm::Assistant> {
+pub fn selector(model: ModelId, backend: BackendId, cpu: bool) -> Result<slm::Assistant> {
     #[allow(unused)]
     let gpu_layers = if cpu { 0 } else { 199 };
     #[allow(unused)]
     let model_info = select_model(model);
     #[allow(unreachable_code)]
     match backend {
-        #[cfg(feature="llama")]
+        #[cfg(feature = "llama")]
         BackendId::Llama => setup_backend(
             slm_llama::ModelConfig::default().with_n_gpu_layers(gpu_layers),
             model_info,
         ),
-        #[cfg(feature="ikllama")]
-        BackendId::Ikllama =>
-            setup_backend(
-                slm_ikllama::ModelConfig::default().with_n_gpu_layers(gpu_layers),
-                model_info,
-            ),
+        #[cfg(feature = "ikllama")]
+        BackendId::Ikllama => setup_backend(
+            slm_ikllama::ModelConfig::default().with_n_gpu_layers(gpu_layers),
+            model_info,
+        ),
         #[allow(unused)]
         _ => Err(anyhow::anyhow!("Unsupported backend")),
     }
@@ -79,9 +70,9 @@ pub fn selector(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, ValueEnum, Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum BackendId {
-    #[cfg(feature="llama")]
+    #[cfg(feature = "llama")]
     Llama,
-    #[cfg(feature="ikllama")]
+    #[cfg(feature = "ikllama")]
     Ikllama,
 }
 

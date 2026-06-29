@@ -118,14 +118,13 @@ pub enum SplitMode {
 }
 
 impl slm::ModelConfig for ModelConfig {
-
     #[allow(refining_impl_trait)]
     fn load_gguf(self, path: impl AsRef<Path>) -> Result<Model, slm::GgufLoaderError> {
         super::backend::init();
         let path_ref = path.as_ref();
         let path = path_ref.to_str().ok_or(slm::GgufLoaderError::InvalidPath)?;
         let model = self.load_llama_model(path)?;
-        Ok(Model{
+        Ok(Model {
             ptr: super::LlamaModelPtr::new(model),
             zone: if self.params.n_gpu_layers > 0 {
                 slm::ComputationZone::GPU

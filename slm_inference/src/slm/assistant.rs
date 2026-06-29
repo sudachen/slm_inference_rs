@@ -267,7 +267,9 @@ impl Assistant {
     pub fn rollback(&mut self, state: &State) -> Result<(), InferenceError> {
         self.inference.rollback(state.pos)?;
         self.active_turn = state.role.clone();
-        if let Some(p) = self.reset_point.as_ref() && p.pos > state.pos {
+        if let Some(p) = self.reset_point.as_ref()
+            && p.pos > state.pos
+        {
             self.reset_point = None;
         }
         Ok(())
@@ -275,10 +277,7 @@ impl Assistant {
 
     /// Save the current state for potential rollback.
     pub fn save(&mut self) -> Result<State, InferenceError> {
-        Ok(State::new(
-            self.inference.pos(),
-            self.active_turn.clone(),
-        ))
+        Ok(State::new(self.inference.pos(), self.active_turn.clone()))
     }
 
     /// Return the total number of tokens in the context.

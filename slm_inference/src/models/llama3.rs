@@ -1,4 +1,4 @@
-use crate::slm::{Formatter, ToolStyle, Role};
+use crate::slm::{Formatter, Role, ToolStyle};
 
 /// [`Formatter`] for Meta Llama 3 models.
 ///

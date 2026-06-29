@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use crate::batch::Batch;
 use crate::model::Model;
 use crate::vocab::Tokenizer;
 use crate::{LlamaContextPtr, LlamaSamplerPtr};
 use slm_inference::slm;
 use slm_inference::slm::ComputationZone;
+use std::sync::Arc;
 
 unsafe impl Send for Context {}
 
@@ -49,9 +49,15 @@ impl slm::Context for Context {
     }
 
     #[inline(never)]
-    fn sample_with_constraint(&mut self, logit_idx: usize, constraint: Option<&mut dyn slm::Constraint>) -> Result<Option<i32>, slm::SamplingError> {
+    fn sample_with_constraint(
+        &mut self,
+        logit_idx: usize,
+        constraint: Option<&mut dyn slm::Constraint>,
+    ) -> Result<Option<i32>, slm::SamplingError> {
         if let Some(c) = constraint {
-            let logits_ptr = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.ctx.get_ptr(), logit_idx as i32) };
+            let logits_ptr = unsafe {
+                llama_cpp_sys_2::llama_get_logits_ith(self.ctx.get_ptr(), logit_idx as i32)
+            };
             let logits = unsafe { std::slice::from_raw_parts_mut(logits_ptr, self.n_vocab) };
             c.mask(logits)?;
         }
@@ -69,7 +75,7 @@ impl slm::Context for Context {
         }
         Ok(Some(token.into()))
     }
-    
+
     #[inline(never)]
     fn clear(&mut self) -> Result<(), slm::ContextError> {
         let memory = unsafe { llama_cpp_sys_2::llama_get_memory(self.ctx.get_ptr()) };
@@ -94,7 +100,11 @@ impl slm::Context for Context {
     }
 
     #[inline(never)]
-    fn cut(&mut self, start_pos: &slm::Pos, end_pos: &slm::Pos) -> Result<slm::Pos, slm::ContextError> {
+    fn cut(
+        &mut self,
+        start_pos: &slm::Pos,
+        end_pos: &slm::Pos,
+    ) -> Result<slm::Pos, slm::ContextError> {
         if start_pos.fork_id != end_pos.fork_id {
             return Err(slm::ContextError::Error(
                 "positions must have the same fork_id".to_string(),
@@ -274,7 +284,11 @@ impl slm::ContextBuilder<Context> for Builder {
 
         let ctx = LlamaContextPtr::new(ctx);
         let edit_level = slm::EditLevel::Cut;
-        let vocab = Arc::new(slm::SimpleVocab::new(Tokenizer::new(ctx.clone(), n_vocab, vocab_ptr)));
+        let vocab = Arc::new(slm::SimpleVocab::new(Tokenizer::new(
+            ctx.clone(),
+            n_vocab,
+            vocab_ptr,
+        )));
 
         Ok(Context {
             ctx,

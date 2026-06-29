@@ -1,5 +1,8 @@
-use crate::models::{Gemma4Flavor, GemmaFormatter, Llama3Formatter, MistralFlavor, MistralFormatter, Phi4Formatter, Qwen25Formatter};
-use super::{Role, ModelFormatterError};
+use super::{ModelFormatterError, Role};
+use crate::models::{
+    Gemma4Flavor, GemmaFormatter, Llama3Formatter, MistralFlavor, MistralFormatter, Phi4Formatter,
+    Qwen25Formatter,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolStyle {

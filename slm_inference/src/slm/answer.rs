@@ -1,8 +1,8 @@
+use super::Formatter;
 use std::borrow::Borrow;
 use std::fmt;
 use std::fmt::Display;
 use std::ops::Deref;
-use super::Formatter;
 
 /// The result of a single generation call, capturing both the generated text and
 /// the completion state of that generation.
@@ -45,9 +45,7 @@ impl<T: Display> Answer<T> {
     /// Returns the generated text regardless of completion state.
     pub fn text(&self) -> String {
         match self {
-            Answer::Complete(s, _)
-            | Answer::Partial(s)
-            | Answer::Incomplete(s) => s.to_string(),
+            Answer::Complete(s, _) | Answer::Partial(s) | Answer::Incomplete(s) => s.to_string(),
         }
     }
 }
@@ -65,9 +63,7 @@ impl<T> Answer<T> {
     /// Returns the generated text regardless of completion state.
     pub fn value(&self) -> &T {
         match self {
-            Answer::Complete(t, _)
-            | Answer::Partial(t)
-            | Answer::Incomplete(t) => t,
+            Answer::Complete(t, _) | Answer::Partial(t) | Answer::Incomplete(t) => t,
         }
     }
 
@@ -79,7 +75,7 @@ impl<T> Answer<T> {
     {
         match self {
             Self::Complete(text, thought) => Self::Complete(f(text), thought),
-            Self::Partial(text) => Self::Partial(f(text), ),
+            Self::Partial(text) => Self::Partial(f(text)),
             Self::Incomplete(text) => Self::Incomplete(f(text)),
         }
     }
@@ -96,7 +92,7 @@ impl<T> Answer<T> {
     }
 }
 
-impl<T:Display> Deref for Answer<T> {
+impl<T: Display> Deref for Answer<T> {
     type Target = T;
     fn deref(&self) -> &T {
         self.value()
@@ -109,7 +105,7 @@ impl AsRef<str> for Answer<String> {
     }
 }
 
-impl<T:Display> AsRef<T> for Answer<T> {
+impl<T: Display> AsRef<T> for Answer<T> {
     fn as_ref(&self) -> &T {
         self.value()
     }
@@ -127,7 +123,7 @@ impl<T: Display> From<Answer<T>> for String {
     }
 }
 
-impl<T:Display> Display for Answer<T> {
+impl<T: Display> Display for Answer<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value().fmt(f)
     }

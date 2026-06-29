@@ -1,5 +1,5 @@
+use super::{Context, ContextBuilder, GgufLoaderError};
 use std::path::Path;
-use super::{Context,ContextBuilder,GgufLoaderError};
 
 /// A loaded model weight set from which inference contexts can be created.
 ///
@@ -11,7 +11,6 @@ pub trait Model {
     /// Return a builder for creating a new inference context backed by this model.
     fn context(&self) -> impl ContextBuilder<Self::Context>;
 }
-
 
 /// Factory that describes how a specific model variant should be loaded.
 ///

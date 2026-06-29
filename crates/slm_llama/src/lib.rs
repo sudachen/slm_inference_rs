@@ -9,7 +9,6 @@ pub use context::{Builder, Context, KVType};
 pub use model::{Model, ModelConfig};
 use slm_inference::core::{Free, SharedPtr};
 
-
 #[derive(Clone)]
 struct LlamaSamplerFree;
 impl Free<llama_cpp_sys_2::llama_sampler> for LlamaSamplerFree {
@@ -19,7 +18,8 @@ impl Free<llama_cpp_sys_2::llama_sampler> for LlamaSamplerFree {
     }
 }
 
-type LlamaSamplerPtr = slm_inference::core::SharedPtr<llama_cpp_sys_2::llama_sampler, LlamaSamplerFree>;
+type LlamaSamplerPtr =
+    slm_inference::core::SharedPtr<llama_cpp_sys_2::llama_sampler, LlamaSamplerFree>;
 
 #[derive(Clone)]
 struct LlamaContextFree;
@@ -30,7 +30,8 @@ impl Free<llama_cpp_sys_2::llama_context> for LlamaContextFree {
     }
 }
 
-type LlamaContextPtr = slm_inference::core::SharedPtr<llama_cpp_sys_2::llama_context, LlamaContextFree>;
+type LlamaContextPtr =
+    slm_inference::core::SharedPtr<llama_cpp_sys_2::llama_context, LlamaContextFree>;
 
 #[derive(Clone)]
 struct LlamaModelFree;
@@ -42,4 +43,3 @@ impl Free<llama_cpp_sys_2::llama_model> for LlamaModelFree {
 }
 
 type LlamaModelPtr = SharedPtr<llama_cpp_sys_2::llama_model, LlamaModelFree>;
-

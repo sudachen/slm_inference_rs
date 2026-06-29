@@ -1,12 +1,15 @@
+use super::{
+    Action, Answer, Batch, BoxedAction, BoxedConstraint, BoxedVocab, ComputationZone, Constraint,
+    ConstraintStep, Context, DecodeError, EditLevel, Inference, InferenceError, Pos,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use super::{Action, Answer, Batch, BoxedAction, BoxedVocab, BoxedConstraint, Constraint, ConstraintStep, Context, EditLevel, Inference, InferenceError, Pos, ComputationZone, DecodeError};
 use tracing::error;
 
 /// Snapshot of a context's state for multi-fork inference.
 ///
 /// Stores the serialized KV cache, position, and sequence metadata.
-#[derive(Clone,Debug,Default)]
+#[derive(Clone, Debug, Default)]
 struct ContextState {
     id: u64,
     state: Vec<u8>,
@@ -58,16 +61,25 @@ impl<C: Context + Send> InferenceCore<C> {
         todo!()
     }
 
-    pub fn set_current_state(&mut self, state_id: u64) ->Result<(), InferenceError> {
+    pub fn set_current_state(&mut self, state_id: u64) -> Result<(), InferenceError> {
         // TODO: dump/save
         Ok(())
     }
 
-    fn internal_prefill(&mut self, tokens: &[i32], logits: bool, state_id: u64, n_cur: usize) -> Result<usize, InferenceError> {
+    fn internal_prefill(
+        &mut self,
+        tokens: &[i32],
+        logits: bool,
+        state_id: u64,
+        n_cur: usize,
+    ) -> Result<usize, InferenceError> {
         self.set_current_state(state_id)?;
         if self.state.n_cur > n_cur {
             if self.context.edit_level() >= EditLevel::Cut {
-                self.state.n_cur = self.context.truncate(&Pos::new(n_cur, self.state.seq_id))?.token_pos;
+                self.state.n_cur = self
+                    .context
+                    .truncate(&Pos::new(n_cur, self.state.seq_id))?
+                    .token_pos;
             } else {
                 // non-cuttable models with SST/Mamba arch
                 self.context.drop(self.state.seq_id)?;
@@ -171,12 +183,11 @@ impl<C: Context + Send> Inference for SimpleInference<C> {
             return Err(InferenceError::EmptyBatch);
         }
         while !brake.brake() {
-            let k = constraint.as_mut().map(|x| x.as_mut() as &mut dyn Constraint);
+            let k = constraint
+                .as_mut()
+                .map(|x| x.as_mut() as &mut dyn Constraint);
             let logit_idx = core.batch.n_tokens() - 1;
-            let token = match core
-                .context
-                .sample_with_constraint(logit_idx, k)?
-            {
+            let token = match core.context.sample_with_constraint(logit_idx, k)? {
                 Some(t) => t,
                 None => {
                     core.batch.clear();

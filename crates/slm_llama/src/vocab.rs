@@ -1,12 +1,14 @@
-use slm_inference::slm::{VobTokenizer, SimpleTokEnv, FfiError, StringToTokenError, TokenToStringError};
+use crate::LlamaContextPtr;
+use slm_inference::slm::{
+    FfiError, SimpleTokEnv, StringToTokenError, TokenToStringError, VobTokenizer,
+};
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::sync::{Arc, OnceLock};
 use toktrie::TokEnv;
-use crate::LlamaContextPtr;
 
-unsafe impl Send for Tokenizer{}
-unsafe impl Sync for Tokenizer{}
+unsafe impl Send for Tokenizer {}
+unsafe impl Sync for Tokenizer {}
 
 pub struct Tokenizer {
     tok_env: OnceLock<toktrie::TokEnv>,
@@ -17,7 +19,11 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
-    pub fn new(ctx_holder: LlamaContextPtr, vocab_size: usize, vocab_ptr: *const llama_cpp_sys_2::llama_vocab ) -> Self {
+    pub fn new(
+        ctx_holder: LlamaContextPtr,
+        vocab_size: usize,
+        vocab_ptr: *const llama_cpp_sys_2::llama_vocab,
+    ) -> Self {
         Self {
             tok_env: OnceLock::new(),
             vocab_size,
@@ -28,13 +34,8 @@ impl Tokenizer {
 }
 
 impl VobTokenizer for Tokenizer {
-
     #[inline(never)]
-    fn token_to_bytes(
-        &self,
-        token: i32,
-        special: bool,
-    ) -> Result<Vec<u8>, TokenToStringError> {
+    fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError> {
         let mut buf: Vec<u8> = vec![0u8; 128];
         let len = buf.len() as c_int;
         let size = unsafe {
@@ -123,7 +124,9 @@ impl VobTokenizer for Tokenizer {
             let tok_eos = unsafe { llama_cpp_sys_2::llama_vocab_eos(self.vocab_ptr) } as u32;
             let mut words = Vec::with_capacity(vocab_size);
             for i in 0..vocab_size {
-                let k = self.token_to_bytes(i as i32,true).unwrap_or_else(|_|vec![]);
+                let k = self
+                    .token_to_bytes(i as i32, true)
+                    .unwrap_or_else(|_| vec![]);
                 if k.starts_with(b"<unused") {
                     words.push(vec![]);
                 } else {
@@ -131,9 +134,8 @@ impl VobTokenizer for Tokenizer {
                     last_used = i;
                 }
             }
-            words.truncate(last_used+1);
+            words.truncate(last_used + 1);
             Arc::new(SimpleTokEnv::new(tok_eos, &words))
         })
-
     }
 }

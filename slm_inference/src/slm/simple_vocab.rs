@@ -1,17 +1,22 @@
+use super::llg_lark::{LarkConstraint, ParserRegistry, json_schema_to_lark, variants_to_lark};
 use super::{BoxedConstraint, SamplingError, StringToTokenError, TokenToStringError, Vocab};
+use llguidance::api::TopLevelGrammar;
 use llguidance::toktrie::{TokEnv, TokRxInfo, TokTrie, TokenId, TokenizerEnv};
 use serde_json::Value;
 use std::any::TypeId;
-use std::sync::{Mutex,OnceLock};
-use llguidance::api::TopLevelGrammar;
-use super::llg_lark::{ParserRegistry, LarkConstraint, json_schema_to_lark, variants_to_lark};
+use std::sync::{Mutex, OnceLock};
 
 /// Low-level tokenizer interface for vocabulary implementations.
 ///
 /// Provides the minimal tokenization operations required by [`SimpleVocab`].
 pub trait VobTokenizer {
     fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError>;
-    fn str_to_tokens(&self, str: &str, add_special: bool, parse_special: bool) -> Result<Vec<i32>, StringToTokenError>;
+    fn str_to_tokens(
+        &self,
+        str: &str,
+        add_special: bool,
+        parse_special: bool,
+    ) -> Result<Vec<i32>, StringToTokenError>;
     fn tok_env(&self) -> &TokEnv;
 }
 
@@ -21,7 +26,7 @@ pub trait VobTokenizer {
 /// delegates tokenization to the wrapped tokenizer.
 pub struct SimpleVocab<T: VobTokenizer + Send + Sync> {
     tokenizer: T,
-    registry: OnceLock<Mutex<ParserRegistry>>
+    registry: OnceLock<Mutex<ParserRegistry>>,
 }
 
 impl<T: VobTokenizer + Send + Sync> SimpleVocab<T> {
@@ -29,7 +34,7 @@ impl<T: VobTokenizer + Send + Sync> SimpleVocab<T> {
     pub fn new(tokenizer: T) -> Self {
         Self {
             tokenizer,
-            registry: OnceLock::new()
+            registry: OnceLock::new(),
         }
     }
 
@@ -46,11 +51,7 @@ impl<T: VobTokenizer + Send + Sync> SimpleVocab<T> {
 }
 
 impl<T: VobTokenizer + Send + Sync> Vocab for SimpleVocab<T> {
-    fn token_to_bytes(
-        &self,
-        token: i32,
-        special: bool,
-    ) -> Result<Vec<u8>, TokenToStringError> {
+    fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError> {
         self.tokenizer.token_to_bytes(token, special)
     }
 
@@ -60,13 +61,14 @@ impl<T: VobTokenizer + Send + Sync> Vocab for SimpleVocab<T> {
         add_special: bool,
         parse_special: bool,
     ) -> Result<Vec<i32>, StringToTokenError> {
-        self.tokenizer.str_to_tokens(str, add_special, parse_special)
+        self.tokenizer
+            .str_to_tokens(str, add_special, parse_special)
     }
 
     fn json_constraint(
         &self,
         type_id: TypeId,
-        json_schema: &dyn Fn() -> Result<(Value,Option<(String,String)>), SamplingError>,
+        json_schema: &dyn Fn() -> Result<(Value, Option<(String, String)>), SamplingError>,
     ) -> Result<BoxedConstraint, SamplingError> {
         let mut registry = self.registry().lock().unwrap();
         if let Some(parser) = registry.parser(type_id, None)? {
@@ -85,7 +87,7 @@ impl<T: VobTokenizer + Send + Sync> Vocab for SimpleVocab<T> {
     fn enum_constraint(
         &self,
         type_id: TypeId,
-        variants: &dyn Fn() -> Result<(Vec<String>,Option<(String,String)>), SamplingError>,
+        variants: &dyn Fn() -> Result<(Vec<String>, Option<(String, String)>), SamplingError>,
     ) -> Result<BoxedConstraint, SamplingError> {
         let mut registry = self.registry().lock().unwrap();
         if let Some(parser) = registry.parser(type_id, None)? {

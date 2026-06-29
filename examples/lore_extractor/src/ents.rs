@@ -1,8 +1,8 @@
-use std::path::PathBuf;
 use clap::Parser;
-use serde::Deserialize;
 use epubscan::EpubScan;
+use serde::Deserialize;
 use slm_inference::slm;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 pub struct Ents {
@@ -20,7 +20,6 @@ pub struct EntityCard {
     pub clue: String,
 }
 
-
 impl Ents {
     pub fn run(&self, assistant: &mut slm::Assistant) -> anyhow::Result<()> {
         let input = self.input[1].clone();
@@ -29,10 +28,11 @@ impl Ents {
         assistant.set_max_answer_tokens(4096);
         assistant.system(SYSTEM_PROMPT)?;
         let pos = assistant.save()?;
-        for section in epub.sections()[1 .. 2].iter() {
+        for section in epub.sections()[1..2].iter() {
             println!("Section: {}", section.title().unwrap_or(""));
             assistant.user(&section.text())?;
-            let cards: Vec<EntityCard> = assistant.ask_values(self.think, ENTITY_PROMPT, slm::Action::print_token())?;
+            let cards: Vec<EntityCard> =
+                assistant.ask_values(self.think, ENTITY_PROMPT, slm::Action::print_token())?;
             println!("{cards:?}");
             assistant.rollback(&pos)?;
         }
@@ -50,7 +50,6 @@ CRITICAL FORMATTING RULES:
 1. Rely ONLY on the clear facts directly mentioned in the provided text. Do not assume or extrapolate.
 2. If the text does not contain data matching the requested focus, return an empty JSON array: [].
 3. Output MUST be a strictly valid JSON array of objects. Do not wrap the JSON in markdown blocks like ```json ... ```. Do not add any conversational text, introductions, or postscripts. Output raw JSON code only."#;
-
 
 const ENTITY_PROMPT: &str = r#"
 Scan the English book text above and extract all unique characters, organizations, species, locations, and universe-specific neologisms/jargon.
