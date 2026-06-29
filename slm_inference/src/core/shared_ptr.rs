@@ -67,10 +67,11 @@ pub struct SharedPtr<T, F: Free<T>> {
     inner: Arc<UniquePtr<T, F>>,
 }
 
+unsafe impl<T, F: Free<T>> Send for SharedPtr<T, F> {}
+
 /// Marker trait asserting that the pointed-to type and its `Free` implementation
 /// are safe to send across threads and share between threads concurrently.
 pub trait ThreadSafe {}
-unsafe impl<T, F: Free<T> + ThreadSafe> Send for SharedPtr<T, F> {}
 unsafe impl<T, F: Free<T> + ThreadSafe> Sync for SharedPtr<T, F> {}
 
 impl<T, F: Free<T>> SharedPtr<T, F> {

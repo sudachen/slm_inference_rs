@@ -1,42 +1,27 @@
-use crate::context::Builder;
-use slm_inference::core::shared_ptr::{Free, SharedPtr};
-use slm_inference::errors::{FfiError, GgufLoaderError};
+use super::Builder;
+use slm_inference::slm;
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use std::sync::Arc;
-use slm_inference::SlmModel;
-use crate::vocab::Vocab;
-
-#[derive(Clone)]
-struct LlamaModelFree;
-impl Free<slm_ikllama_sys::llama_model> for LlamaModelFree {
-    #[inline(never)]
-    unsafe fn free(ptr: *mut slm_ikllama_sys::llama_model) {
-        unsafe { slm_ikllama_sys::llama_free_model(ptr) };
-    }
-}
-
-type ModelPtr = SharedPtr<slm_ikllama_sys::llama_model, LlamaModelFree>;
 
 #[derive(Clone)]
 pub struct Model {
-    ptr: ModelPtr,
-    vocab: Arc<Vocab>,
+    ptr: super::LlamaModelPtr,
+    pub zone: slm::ComputationZone,
 }
 
 impl Model {
     #[allow(dead_code)]
-    pub fn get_ptr(&mut self) -> Result<*mut slm_ikllama_sys::llama_model, FfiError> {
+    pub fn get_ptr(&mut self) -> Result<*mut slm_ikllama_sys::llama_model, slm::FfiError> {
         if self.ptr.is_null() {
-            return Err(FfiError::NullPtr);
+            return Err(slm::FfiError::NullPtr);
         }
         Ok(self.ptr.get_ptr())
     }
     #[allow(dead_code)]
-    pub fn get_const_ptr(&self) -> Result<*const slm_ikllama_sys::llama_model, FfiError> {
+    pub fn get_const_ptr(&self) -> Result<*const slm_ikllama_sys::llama_model, slm::FfiError> {
         if self.ptr.is_null() {
-            return Err(FfiError::NullPtr);
+            return Err(slm::FfiError::NullPtr);
         }
         Ok(self.ptr.get_const_ptr())
     }
@@ -44,14 +29,9 @@ impl Model {
     pub fn raw_ptr(&self) -> *mut slm_ikllama_sys::llama_model {
         self.ptr.get_ptr()
     }
-
-    #[allow(refining_impl_trait)]
-    pub(crate) fn vocab(&self) -> &Vocab {
-        self.vocab.as_ref()
-    }
 }
 
-impl SlmModel for Model {
+impl slm::Model for Model {
     type Context = crate::context::Context;
 
     #[allow(refining_impl_trait)]
@@ -137,20 +117,21 @@ pub enum SplitMode {
     Tensor = slm_ikllama_sys::LLAMA_SPLIT_MODE_GRAPH as i8,
 }
 
-impl slm_inference::SlmModelConfig for ModelConfig {
-    type Context = crate::context::Context;
-    type Model = Model;
+impl slm::ModelConfig for ModelConfig {
 
-    fn load_gguf(self, path: impl AsRef<Path>) -> Result<Model, GgufLoaderError> {
+    #[allow(refining_impl_trait)]
+    fn load_gguf(self, path: impl AsRef<Path>) -> Result<Model, slm::GgufLoaderError> {
         super::backend::init();
         let path_ref = path.as_ref();
-        let path = path_ref.to_str().ok_or(GgufLoaderError::InvalidPath)?;
+        let path = path_ref.to_str().ok_or(slm::GgufLoaderError::InvalidPath)?;
         let model = self.load_llama_model(path)?;
-        let vcab_ptr = unsafe { slm_ikllama_sys::llama_model_get_vocab(model) };
-        let vocab = Arc::new(Vocab::new(model, vcab_ptr));
         Ok(Model{
-            ptr: ModelPtr::new(model),
-            vocab,
+            ptr: super::LlamaModelPtr::new(model),
+            zone: if self.params.n_gpu_layers > 0 {
+                slm::ComputationZone::GPU
+            } else {
+                slm::ComputationZone::CPU
+            },
         })
     }
 }
@@ -160,13 +141,13 @@ impl ModelConfig {
     pub fn load_llama_model(
         &self,
         path: &str,
-    ) -> Result<*mut slm_ikllama_sys::llama_model, GgufLoaderError> {
+    ) -> Result<*mut slm_ikllama_sys::llama_model, slm::GgufLoaderError> {
         let cstr = CString::new(path)
-            .map_err(|_| FfiError::Error("path string allocation".to_string()))?;
+            .map_err(|_| slm::FfiError::Error("path string allocation".to_string()))?;
         let llama_model =
             unsafe { slm_ikllama_sys::llama_model_load_from_file(cstr.as_ptr(), self.params) };
         if llama_model.is_null() {
-            return Err(GgufLoaderError::BadModel);
+            return Err(slm::GgufLoaderError::BadModel);
         }
         Ok(llama_model)
     }

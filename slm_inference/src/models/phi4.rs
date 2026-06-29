@@ -1,12 +1,5 @@
-use crate::SlmRole;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
+use crate::slm::{Formatter, ToolStyle, Role};
 
-/// [`SlmFormatter`] for Microsoft Phi-4 models.
-///
-/// Uses Phi-4's role tokens (`system`, `user`, `assistant`, `end`) and a unified
-/// `<|end|>` turn-closing token.  There is no explicit BOS token; the model starts
-/// directly with the first role delimiter.  Reasoning blocks use `<think>` /
-/// `</think>` tags (for DeepSeek-R1-Distill-Phi-4 distillations).
 pub struct Phi4Formatter {
     thinking: bool,
 }
@@ -17,23 +10,23 @@ impl Phi4Formatter {
     }
 }
 
-impl SlmFormatter for Phi4Formatter {
+impl Formatter for Phi4Formatter {
     // The official Phi-4 template has no explicit BOS token (<s>).
     // Generation and context start directly with the special token of the first role.
     fn bos(&self) -> Option<&str> {
         None
     }
 
-    fn turn_start(&self, role: &SlmRole) -> String {
+    fn turn_start(&self, role: &Role) -> String {
         // As in ChatML, a \n newline is strictly required after the role token!
         match role {
-            SlmRole::System => "<|system|>\n".to_string(),
-            SlmRole::User => "<|user|>\n".to_string(),
-            SlmRole::Assistant => "<|assistant|>\n".to_string(),
+            Role::System => "<|system|>\n".to_string(),
+            Role::User => "<|user|>\n".to_string(),
+            Role::Assistant => "<|assistant|>\n".to_string(),
         }
     }
 
-    fn turn_end(&self, role: &SlmRole) -> String {
+    fn turn_end(&self, role: &Role) -> String {
         match role {
             // Microsoft's philosophy: every turn, regardless of role, is closed with a single <|end|> token
             _ => "<|end|>\n".to_string(),
@@ -67,8 +60,8 @@ impl SlmFormatter for Phi4Formatter {
         }
     }
 
-    fn tool_style(&self) -> SlmToolStyle {
-        SlmToolStyle::Inline
+    fn tool_style(&self) -> ToolStyle {
+        ToolStyle::Inline
     }
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {

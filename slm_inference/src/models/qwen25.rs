@@ -1,11 +1,5 @@
-use crate::SlmRole;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
+use crate::slm::{Formatter, ToolStyle, Role};
 
-/// [`SlmFormatter`] for Qwen 2.5 models (including QwQ and DeepSeek-R1-Distill-Qwen).
-///
-/// Uses the ChatML convention with `im_start` / `im_end` markers and a dedicated
-/// `tool` role for tool responses.  There is no explicit BOS token.  Reasoning
-/// blocks use `<think>` / `</think>` tags.
 pub struct Qwen25Formatter {
     thinking: bool,
 }
@@ -16,23 +10,23 @@ impl Qwen25Formatter {
     }
 }
 
-impl SlmFormatter for Qwen25Formatter {
+impl Formatter for Qwen25Formatter {
     // The official Qwen 2.5 template has no dedicated BOS token (it is null).
     // The model always starts directly with the first markup tag.
     fn bos(&self) -> Option<&str> {
         None
     }
 
-    fn turn_start(&self, role: &SlmRole) -> String {
+    fn turn_start(&self, role: &Role) -> String {
         // ChatML requires a strict \n newline immediately after the role name!
         match role {
-            SlmRole::System => "<|im_start|>system\n".to_string(),
-            SlmRole::User => "<|im_start|>user\n".to_string(),
-            SlmRole::Assistant => "<|im_start|>assistant\n".to_string(),
+            Role::System => "<|im_start|>system\n".to_string(),
+            Role::User => "<|im_start|>user\n".to_string(),
+            Role::Assistant => "<|im_start|>assistant\n".to_string(),
         }
     }
 
-    fn turn_end(&self, role: &SlmRole) -> String {
+    fn turn_end(&self, role: &Role) -> String {
         match role {
             // Every ChatML container closes the same way, plus \n to keep history clean
             _ => "<|im_end|>\n".to_string(),
@@ -66,8 +60,8 @@ impl SlmFormatter for Qwen25Formatter {
         }
     }
 
-    fn tool_style(&self) -> SlmToolStyle {
-        SlmToolStyle::Inline
+    fn tool_style(&self) -> ToolStyle {
+        ToolStyle::Inline
     }
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {

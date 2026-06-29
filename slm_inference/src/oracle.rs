@@ -102,6 +102,9 @@ pub trait SlmOracle {
     }
 }
 
+pub type BoxedOracle = Box<dyn SlmOracle>;
+
+
 /// Extension of [`SlmOracle`] that generates structured JSON output validated against
 /// the compile-time schema of a `serde`/`schemars` type `T`.
 ///

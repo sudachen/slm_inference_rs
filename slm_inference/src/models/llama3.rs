@@ -1,31 +1,24 @@
-use crate::SlmRole;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
-
-/// [`SlmFormatter`] for Meta Llama 3 models.
-///
-/// Uses Llama 3's `<|start_header_id|>role<|end_header_id|>` header tokens and
-/// `<|eot_id|>` end-of-turn markers.  Reasoning blocks use `<think>` / `</think>` tags.
-/// Tool responses occupy a dedicated `ipython` role turn ([`SlmToolStyle::SeparateTurn`]).
+use crate::slm::{Formatter, ToolStyle, Role};
 pub struct Llama3Formatter;
 
-impl SlmFormatter for Llama3Formatter {
+impl Formatter for Llama3Formatter {
     fn bos(&self) -> Option<&str> {
         Some("<|begin_of_text|>")
     }
-    fn tool_style(&self) -> SlmToolStyle {
-        SlmToolStyle::SeparateTurn
+    fn tool_style(&self) -> ToolStyle {
+        ToolStyle::SeparateTurn
     }
 
-    fn turn_start(&self, role: &SlmRole) -> String {
+    fn turn_start(&self, role: &Role) -> String {
         match role {
-            SlmRole::System => "<|start_header_id|>system<|end_header_id|>\n\n".to_string(),
-            SlmRole::User => "<|start_header_id|>user<|end_header_id|>\n\n".to_string(),
-            SlmRole::Assistant => "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
+            Role::System => "<|start_header_id|>system<|end_header_id|>\n\n".to_string(),
+            Role::User => "<|start_header_id|>user<|end_header_id|>\n\n".to_string(),
+            Role::Assistant => "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
             // "<|start_header_id|>ipython<|end_header_id|>\n\n".to_string(),
         }
     }
 
-    fn turn_end(&self, _role: &SlmRole) -> String {
+    fn turn_end(&self, _role: &Role) -> String {
         "<|eot_id|>".to_string()
     }
 

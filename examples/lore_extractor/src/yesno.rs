@@ -5,11 +5,18 @@ use clap::{Parser, ValueEnum};
 use epubscan::EpubScan;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use slm_inference::*;
+use slm_inference::slm;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use tracing::{debug, error};
+use strum::{VariantNames,EnumString,AsRefStr};
+
+#[derive(Debug, VariantNames, EnumString, AsRefStr, Deserialize, Eq, PartialEq)]
+pub enum YesOrNo {
+    Yes,
+    No,
+}
 
 #[derive(Parser, Debug)]
 pub struct YesNoArgs {
@@ -24,7 +31,7 @@ pub struct YesNoArgs {
 }
 
 impl YesNoArgs {
-    pub fn run(&self, oracle: &mut dyn SlmOracle) -> Result<()> {
+    pub fn run(&self, oracle: &mut slm::Oracle) -> Result<()> {
         println!(
             "Answer Yes/No for questions over {} file(s):",
             self.input.len()
@@ -62,10 +69,13 @@ impl YesNoArgs {
             let question = q.question;
             let no = no + 1;
             println!("Question {no}: {question}");
-            let answer = oracle.ask(self.think, &question, None)?;
-            println!("E {question} -> {answer} ?= {}", q.answer);
-            println!("T {}", answer.thought().unwrap_or(""));
-            if answer.trim().to_lowercase() != q.answer.trim().to_lowercase() {
+            let answer : slm::Answer<YesOrNo> = oracle.choose(self.think, &question, None)?;
+            let t = answer.thought().unwrap_or("");
+            if t.len() > 0 {
+                println!("-\n{t}\n-");
+            }
+            println!("E {question} -> {:?} ?= {:?}\n-=-", answer.value(), q.answer);
+            if answer.value() != &q.answer {
                 error!("failed to answer question {no} : {question}");
             }
         }
@@ -73,8 +83,8 @@ impl YesNoArgs {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct YesNoQuest {
     question: String,
-    answer: String,
+    answer: YesOrNo,
 }

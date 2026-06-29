@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::{ValueEnum};
-use slm_inference::{SlmHfModel, SlmKvType, SlmContextBuilder, SlmModelConfig, SlmOracle, SlmSimpleOracle, SlmDynamicFormatter, SlmModel};
+use slm_inference::{slm, slm::Model, slm::ContextBuilder};
 use strum::Display;
 
 #[allow(unused)]
 pub fn setup_backend(
-    config: impl SlmModelConfig + 'static,
-    model_info: SlmHfModel,
-) -> Result<Box<dyn SlmOracle>> {
+    config: impl slm::ModelConfig + 'static,
+    model_info: slm::HfModel,
+) -> Result<slm::Oracle> {
     let model = model_info.load(config)?;
     let mut builder = model
         .context()
@@ -15,34 +15,33 @@ pub fn setup_backend(
         .with_sampler(0.3, 20, 0.9);
     if model_info.formatter != "phi4" {
         builder = builder
-            .with_gen_type_kv(SlmKvType::Q6, SlmKvType::Q6)
+            .with_gen_type_kv(slm::KvType::Q6, slm::KvType::Q6)
     }
     let context = builder.build()?;
-    let oracle = SlmSimpleOracle::new(
+    Ok(slm::Oracle::new(
         context,
-        SlmDynamicFormatter::try_from(model_info.formatter)?,
-    )?;
-    Ok(Box::new(oracle))
+        slm::DynamicFormatter::try_from(model_info.formatter)?,
+    )?)
 }
 
-pub fn select_model(model: ModelId) -> SlmHfModel {
+pub fn select_model(model: ModelId) -> slm::HfModel {
     match model {
-        ModelId::Gemma4eb => SlmHfModel {
+        ModelId::Gemma4eb => slm::HfModel {
             repo: "unsloth/gemma-4-E4B-it-GGUF",
             filename: "gemma-4-E4B-it-IQ4_XS.gguf",
             formatter: "gemma4",
         },
-        ModelId::Gemma12b => SlmHfModel {
+        ModelId::Gemma12b => slm::HfModel {
             repo: "unsloth/gemma-4-12B-it-qat-GGUF",
             filename: "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
             formatter: "gemma4",
         },
-        ModelId::Phi4 => SlmHfModel {
+        ModelId::Phi4 => slm::HfModel {
             repo: "bartowski/microsoft_Phi-4-mini-reasoning-GGUF",
             filename: "microsoft_Phi-4-mini-reasoning-IQ4_XS.gguf",
             formatter: "phi4",
         },
-        ModelId::Qwen25 => SlmHfModel {
+        ModelId::Qwen25 => slm::HfModel {
             repo: "bartowski/Qwen2.5-7B-Instruct-GGUF",
             filename: "Qwen2.5-7B-Instruct-IQ4_XS.gguf",
             formatter: "qwen25",
@@ -54,7 +53,7 @@ pub fn selector(
     model: ModelId,
     backend: BackendId,
     cpu: bool,
-) -> Result<Box<dyn SlmOracle>> {
+) -> Result<slm::Oracle> {
     #[allow(unused)]
     let gpu_layers = if cpu { 0 } else { 199 };
     #[allow(unused)]

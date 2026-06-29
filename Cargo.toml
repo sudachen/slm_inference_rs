@@ -50,3 +50,4 @@ itertools = "0.15"
 llguidance = "1.7"
 schemars = "1.2"
 strum = { version = "0.28", features = ["derive"] }
+tokio = { version = "1.45", features = ["full"] }

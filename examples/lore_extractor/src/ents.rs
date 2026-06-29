@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use serde::Deserialize;
 use epubscan::EpubScan;
-use slm_inference::{SlmAction, SlmJsonOracle, SlmOracle};
+use slm_inference::slm;
 
 #[derive(Parser, Debug)]
 pub struct EntsArgs {
@@ -22,7 +22,7 @@ pub struct EntityCard {
 
 
 impl EntsArgs {
-    pub fn run(&self, oracle: &mut dyn SlmOracle) -> anyhow::Result<()> {
+    pub fn run(&self, oracle: &mut slm::Oracle) -> anyhow::Result<()> {
         let input = self.input[1].clone();
         println!("Input: {:?}", input);
         let epub = EpubScan::from_file(&input)?;
@@ -32,7 +32,7 @@ impl EntsArgs {
         for section in epub.sections()[1 .. 2].iter() {
             println!("Section: {}", section.title().unwrap_or(""));
             oracle.user(&section.text())?;
-            let cards: Vec<EntityCard> = oracle.json_ask(self.think,ENTITY_PROMPT,Some(SlmAction::print_token()))?;
+            let cards: Vec<EntityCard> = oracle.ask_values(self.think,ENTITY_PROMPT,slm::Action::print_token())?;
             println!("{cards:?}");
             oracle.rollback(&pos)?;
         }

@@ -1,45 +1,36 @@
-use crate::batch::{Batch, Token};
-use crate::model::Model;
-use crate::vocab::Vocab;
+use std::sync::Arc;
+use super::{Batch, Model, vocab::Tokenizer};
+use slm_inference::slm;
+use slm_inference::slm::ComputationZone;
 
-use slm_inference::core::shared_ptr::{Free, SharedPtr};
-use slm_inference::errors::{
-    BatchError, ContextBuilderError, ContextError, DecodeError, SamplingError,
-};
-use slm_inference::{SlmConstraint, SlmContext, SlmContextBuilder, SlmEditLevel, SlmKvType, SlmPos};
-
-#[derive(Clone)]
-struct LlamaContextFree;
-impl Free<slm_ikllama_sys::llama_context> for LlamaContextFree {
-    #[inline(never)]
-    unsafe fn free(ptr: *mut slm_ikllama_sys::llama_context) {
-        unsafe { slm_ikllama_sys::llama_free(ptr) };
-    }
-}
+unsafe impl Send for Context {}
 
 #[derive(Clone)]
 pub struct Context {
     vocab_ptr: *const slm_ikllama_sys::llama_vocab,
     n_batch: u32,
     n_vocab: usize,
-    ctx: SharedPtr<slm_ikllama_sys::llama_context, LlamaContextFree>,
-    edit_level: SlmEditLevel,
+    ctx: super::LlamaContextPtr,
+    edit_level: slm::EditLevel,
     temperature: f32,
     top_k: i32,
     top_p: f32,
     #[allow(dead_code)]
     model: Model,
+    vocab: slm::BoxedVocab,
 }
 
-impl SlmContext for Context {
-    type Token = Token;
+impl slm::Context for Context {
     type Batch = Batch;
-    type Vocab = Vocab;
-    fn vocab(&self) -> &Self::Vocab {
-        self.model.vocab()
+    fn vocab(&self) -> &slm::BoxedVocab {
+        &self.vocab
     }
 
-    fn new_batch(&self, tokens: usize, sequences: usize) -> Result<Batch, BatchError> {
+    fn zone(&self) -> ComputationZone {
+        self.model.zone
+    }
+
+    fn new_batch(&self, tokens: usize, sequences: usize) -> Result<Batch, slm::BatchError> {
         Batch::new(tokens, sequences)
     }
 
@@ -48,19 +39,19 @@ impl SlmContext for Context {
     }
 
     #[inline(never)]
-    fn decode(&mut self, batch: &mut Batch) -> Result<(), DecodeError> {
+    fn decode(&mut self, batch: &mut Batch) -> Result<(), slm::DecodeError> {
         let result =
             unsafe { slm_ikllama_sys::llama_decode(self.ctx.get_ptr(), batch.llama_batch) };
 
         if result != 0 {
-            return Err(DecodeError::from(result));
+            return Err(slm::DecodeError::from(result));
         }
 
         Ok(())
     }
 
     #[inline(never)]
-    fn sample_with_constraint(&mut self, logit_idx: usize, constraint: Option<&mut dyn SlmConstraint>) -> Result<Option<Self::Token>, SamplingError> {
+    fn sample_with_constraint(&mut self, logit_idx: usize, constraint: Option<&mut dyn slm::Constraint>) -> Result<Option<i32>, slm::SamplingError> {
         unsafe {
             let ctx = self.ctx.get_ptr();
             // TODO: validate logit_idx
@@ -105,37 +96,37 @@ impl SlmContext for Context {
     }
 
     #[inline(never)]
-    fn clear(&mut self) -> Result<(), ContextError> {
+    fn clear(&mut self) -> Result<(), slm::ContextError> {
         let ctx = self.ctx.get_ptr();
         unsafe { slm_ikllama_sys::llama_kv_cache_clear(ctx) };
         Ok(())
     }
 
-    fn drop(&mut self, fork_id: usize) -> Result<(), ContextError> {
+    fn drop(&mut self, fork_id: usize) -> Result<(), slm::ContextError> {
         let ctx = self.ctx.get_ptr();
         unsafe { slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, -1, -1) };
         Ok(())
     }
 
     #[inline(never)]
-    fn truncate(&mut self, pos: &SlmPos) -> Result<SlmPos, ContextError> {
-        let SlmPos { token_pos, fork_id } = *pos;
+    fn truncate(&mut self, pos: &slm::Pos) -> Result<slm::Pos, slm::ContextError> {
+        let slm::Pos { token_pos, fork_id } = *pos;
         let ctx = self.ctx.get_ptr();
         unsafe {
             slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, token_pos as i32, -1)
         };
-        Ok(SlmPos::new(token_pos, fork_id))
+        Ok(slm::Pos::new(token_pos, fork_id))
     }
 
     #[inline(never)]
-    fn cut(&mut self, start_pos: &SlmPos, end_pos: &SlmPos) -> Result<SlmPos, ContextError> {
+    fn cut(&mut self, start_pos: &slm::Pos, end_pos: &slm::Pos) -> Result<slm::Pos, slm::ContextError> {
         if start_pos.fork_id != end_pos.fork_id {
-            return Err(ContextError::Error(
+            return Err(slm::ContextError::Error(
                 "positions must have the same fork_id".to_string(),
             ));
         }
         if start_pos.token_pos < end_pos.token_pos {
-            return Err(ContextError::Error(
+            return Err(slm::ContextError::Error(
                 "start_pos must be before end_pos".to_string(),
             ));
         }
@@ -161,18 +152,18 @@ impl SlmContext for Context {
         let next_pos = unsafe {
             slm_ikllama_sys::llama_kv_cache_seq_pos_max(ctx, start_pos.fork_id as i32) + 1
         };
-        Ok(SlmPos::new(next_pos as usize, start_pos.fork_id))
+        Ok(slm::Pos::new(next_pos as usize, start_pos.fork_id))
     }
 
-    fn dump(&mut self) -> Result<Vec<u8>, ContextError> {
+    fn dump(&mut self) -> Result<Vec<u8>, slm::ContextError> {
         todo!()
     }
 
-    fn restore(&mut self, _data: Vec<u8>) -> Result<(), ContextError> {
+    fn restore(&mut self, _data: Vec<u8>) -> Result<(), slm::ContextError> {
         todo!()
     }
 
-    fn edit_level(&self) -> SlmEditLevel {
+    fn edit_level(&self) -> slm::EditLevel {
         self.edit_level
     }
 }
@@ -198,15 +189,15 @@ pub enum KVType {
 }
 
 impl KVType {
-    pub fn from(t: SlmKvType) -> Option<(KVType, bool)> {
+    pub fn from(t: slm::KvType) -> Option<(KVType, bool)> {
         match t {
-            SlmKvType::Q4 => Some((KVType::Q4_0, true)),
-            SlmKvType::Q5 => Some((KVType::Q5_0, true)),
-            SlmKvType::Q6 => Some((KVType::Q6_0, true)),
-            SlmKvType::Q8 => Some((KVType::Q8_0, true)),
-            SlmKvType::RawQ8 => Some((KVType::Q8_0, false)),
-            SlmKvType::F16 => Some((KVType::F16, false)),
-            SlmKvType::F32 => Some((KVType::F32, false)),
+            slm::KvType::Q4 => Some((KVType::Q4_0, true)),
+            slm::KvType::Q5 => Some((KVType::Q5_0, true)),
+            slm::KvType::Q6 => Some((KVType::Q6_0, true)),
+            slm::KvType::Q8 => Some((KVType::Q8_0, true)),
+            slm::KvType::RawQ8 => Some((KVType::Q8_0, false)),
+            slm::KvType::F16 => Some((KVType::F16, false)),
+            slm::KvType::F32 => Some((KVType::F32, false)),
         }
     }
 }
@@ -249,9 +240,9 @@ impl Builder {
     }
 }
 
-impl SlmContextBuilder<Context> for Builder {
+impl slm::ContextBuilder<Context> for Builder {
     #[inline(never)]
-    fn build(mut self) -> Result<Context, ContextBuilderError> {
+    fn build(mut self) -> Result<Context, slm::ContextBuilderError> {
         let ctx =
             unsafe { slm_ikllama_sys::llama_init_from_model(self.model.get_ptr()?, self.params) };
 
@@ -259,11 +250,13 @@ impl SlmContextBuilder<Context> for Builder {
         let vocab_ptr = unsafe { slm_ikllama_sys::llama_model_get_vocab(model_ptr) };
         let n_vocab = unsafe { slm_ikllama_sys::llama_n_vocab(model_ptr) } as usize;
 
+        let ctx = super::LlamaContextPtr::new(ctx);
+        let vocab = Arc::new(slm::SimpleVocab::new(Tokenizer::new(ctx.clone(), n_vocab, model_ptr)));
         // TODO: decide by arch from model metadata
-        let edit_level = SlmEditLevel::Cut;
+        let edit_level = slm::EditLevel::Cut;
 
         Ok(Context {
-            ctx: SharedPtr::new(ctx),
+            ctx,
             vocab_ptr,
             n_batch: self.params.n_batch,
             n_vocab,
@@ -272,6 +265,8 @@ impl SlmContextBuilder<Context> for Builder {
             top_k: self.top_k,
             top_p: self.top_p,
             model: self.model,
+            vocab,
+
         })
     }
 
@@ -296,7 +291,7 @@ impl SlmContextBuilder<Context> for Builder {
     }
 
     #[inline(never)]
-    fn with_gen_type_kv(mut self, k: SlmKvType, v: SlmKvType) -> Self {
+    fn with_gen_type_kv(mut self, k: slm::KvType, v: slm::KvType) -> Self {
         let (k, kh) = KVType::from(k).unwrap();
         let (v, vh) = KVType::from(v).unwrap();
         self.params.flash_attn = true;

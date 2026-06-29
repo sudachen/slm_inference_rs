@@ -143,31 +143,6 @@ impl<C: SlmContext> SlmSimpleInference<C> {
     }
 }
 
-impl<C: SlmContext> SlmSimpleInference<C> {
-    fn internal_prefill(&mut self, logits: bool) -> Result<(), InferenceError> {
-        if self.n_cur < self.tokens.len() {
-            let last_index = self.tokens.len() - 1;
-            let n_batch = self.batch.n_max();
-            let base_pos = self.n_cur;
-            self.batch.clear();
-            for (i, token) in self.tokens[base_pos..].iter().enumerate() {
-                let pos = base_pos + i;
-                let is_last = pos == last_index;
-                self.batch
-                    .add(*token, SlmPos::new(pos, 0), is_last && logits)?;
-                if self.batch.n_tokens() >= n_batch || is_last {
-                    self.n_cur += self.batch.n_tokens();
-                    self.context.decode(&mut self.batch)?;
-                    if !is_last {
-                        self.batch.clear();
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 impl<C: SlmContext> SlmInference for SlmSimpleInference<C> {
     fn prefill(&mut self, prompt: &str) -> Result<usize, InferenceError> {
         let tokens_list = self.context.str_to_tokens(prompt, false, true)?;

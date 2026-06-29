@@ -1,15 +1,12 @@
-use crate::SlmModelConfig;
-use anyhow::Context as _;
-use hf_hub::api::sync::ApiBuilder;
 use std::path::PathBuf;
+use hf_hub::api::sync::ApiBuilder;
 use tracing::debug;
 
-/// Descriptor for a model hosted on HuggingFace Hub.
-///
-/// Call [`get_or_download`](Self::get_or_download) to resolve the local path
-/// (downloading into the HF cache if necessary), or [`load`](Self::load) to
-/// both download and immediately construct a model handle.
-pub struct SlmHfModel {
+use anyhow::Context as _;
+use super::{ModelConfig,Model};
+
+#[derive(Copy,Clone)]
+pub struct HfModel {
     /// HuggingFace repository identifier (e.g. `"bartowski/Llama-3.2-3B-Instruct-GGUF"`).
     pub repo: &'static str,
     /// Filename within the repository (e.g. `"Llama-3.2-3B-Instruct-Q8_0.gguf"`).
@@ -19,16 +16,16 @@ pub struct SlmHfModel {
     pub formatter: &'static str,
 }
 
-impl SlmHfModel {
+impl HfModel {
     /// Resolve the model's local cache path, downloading from HuggingFace if absent.
     pub fn get_or_download(&self) -> anyhow::Result<PathBuf> {
         get_or_download_model(self.repo, self.filename)
     }
 
     #[allow(dead_code)]
-    pub fn load<Config>(&self, cfg: Config) -> anyhow::Result<Config::Model>
+    pub fn load<Config>(self, cfg: Config) -> anyhow::Result<impl Model>
     where
-        Config: SlmModelConfig,
+        Config: ModelConfig,
     {
         let path = self.get_or_download()?;
         cfg.load_gguf(path).context("Failed to load model")

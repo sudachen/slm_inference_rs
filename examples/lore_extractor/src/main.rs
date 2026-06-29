@@ -17,9 +17,9 @@ fn main() -> Result<(), anyhow::Error> {
     let mut oracle = selector(cli.model, cli.backend, cli.cpu)?;
 
     match cli.command {
-        Commands::YesNo(args) => args.run(oracle.as_mut()),
-        Commands::SayHi(args) => args.run(oracle.as_mut()),
-        Commands::Ents(args) => args.run(oracle.as_mut()),
+        Commands::YesNo(args) => args.run(&mut oracle),
+        Commands::SayHi(args) => args.run(&mut oracle),
+        Commands::Ents(args) => args.run(&mut oracle),
     }
 }
 

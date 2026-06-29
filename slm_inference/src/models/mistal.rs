@@ -1,11 +1,6 @@
-use crate::SlmRole;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
+use crate::slm::{Formatter, ToolStyle, Role};
 
-/// [`SlmFormatter`] for Mistral AI models.
-///
-/// Supports both the modern V3/Tekken tokenizer template (`[INST]` / `[/INST]`
-/// with native system and tool tokens) and the legacy v1/v2 template.
-/// Reasoning blocks use `<think>` / `</think>` tags (for R1 distillations).
+
 pub struct MistralFormatter {
     flavor: MistralFlavor,
     thinking: bool,
@@ -25,41 +20,41 @@ impl MistralFormatter {
     }
 }
 
-impl SlmFormatter for MistralFormatter {
+impl Formatter for MistralFormatter {
     // Native BOS for all Mistral models
     fn bos(&self) -> Option<&str> {
         Some("<s>")
     }
 
-    fn turn_start(&self, role: &SlmRole) -> String {
+    fn turn_start(&self, role: &Role) -> String {
         match self.flavor {
             MistralFlavor::V3Tekken => match role {
-                SlmRole::System => "[SYSTEM_PROMPT]".to_string(),
-                SlmRole::User => "[INST]".to_string(),
+                Role::System => "[SYSTEM_PROMPT]".to_string(),
+                Role::User => "[INST]".to_string(),
                 // In Mistral, the model response follows IMMEDIATELY after [/INST] with no prefix
-                SlmRole::Assistant => String::new(),
+                Role::Assistant => String::new(),
             },
             MistralFlavor::Legacy => match role {
                 // Legacy models had no system token; system text was packed inside [INST]
-                SlmRole::System => "[INST] ".to_string(),
-                SlmRole::User => "[INST]".to_string(),
-                SlmRole::Assistant => String::new(),
+                Role::System => "[INST] ".to_string(),
+                Role::User => "[INST]".to_string(),
+                Role::Assistant => String::new(),
             },
         }
     }
 
-    fn turn_end(&self, role: &SlmRole) -> String {
+    fn turn_end(&self, role: &Role) -> String {
         match self.flavor {
             MistralFlavor::V3Tekken => match role {
-                SlmRole::System => " [/SYSTEM_PROMPT]\n".to_string(),
-                SlmRole::User => " [/INST]\n".to_string(),
+                Role::System => " [/SYSTEM_PROMPT]\n".to_string(),
+                Role::User => " [/INST]\n".to_string(),
                 // Each assistant turn in Mistral is closed with the classic EOS
-                SlmRole::Assistant => "</s>".to_string(),
+                Role::Assistant => "</s>".to_string(),
             },
             MistralFlavor::Legacy => match role {
-                SlmRole::System => "\n\n".to_string(), // Separate system from user with a newline
-                SlmRole::User => "[/INST]".to_string(),
-                SlmRole::Assistant => "</s>".to_string(),
+                Role::System => "\n\n".to_string(), // Separate system from user with a newline
+                Role::User => "[/INST]".to_string(),
+                Role::Assistant => "</s>".to_string(),
             },
         }
     }
@@ -91,8 +86,8 @@ impl SlmFormatter for MistralFormatter {
         }
     }
 
-    fn tool_style(&self) -> SlmToolStyle {
-        SlmToolStyle::Inline
+    fn tool_style(&self) -> ToolStyle {
+        ToolStyle::Inline
     }
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {

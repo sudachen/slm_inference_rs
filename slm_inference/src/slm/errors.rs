@@ -44,6 +44,8 @@ pub enum TokenToStringError {
     InvalidLstrip,
     #[error("FfiError {0}")]
     FfiError(#[from] FfiError),
+    #[error("Unsupported")]
+    Unsupported,
 }
 
 /// Errors converting a UTF-8 string into a sequence of token IDs.
@@ -53,6 +55,8 @@ pub enum StringToTokenError {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("FfiError {0}")]
     FfiError(#[from] FfiError),
+    #[error("Unsupported")]
+    Unsupported,
 }
 
 /// Top-level inference error that unifies all failure modes across the generation pipeline.

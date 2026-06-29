@@ -1,5 +1,4 @@
-use crate::SlmRole;
-use crate::formatter::{SlmFormatter, SlmToolStyle};
+use crate::slm::{Formatter, ToolStyle, Role};
 
 /// [`SlmFormatter`] for Google Gemma 4 models.
 ///
@@ -29,19 +28,19 @@ impl GemmaFormatter {
     }
 }
 
-impl SlmFormatter for GemmaFormatter {
+impl Formatter for GemmaFormatter {
     fn bos(&self) -> Option<&str> {
         Some("<bos>")
     }
-    fn turn_start(&self, role: &SlmRole) -> String {
+    fn turn_start(&self, role: &Role) -> String {
         match role {
-            SlmRole::System => "<|turn>system\n".to_string(),
-            SlmRole::User => "<|turn>user\n".to_string(),
-            SlmRole::Assistant => "<|turn>model\n".to_string(),
+            Role::System => "<|turn>system\n".to_string(),
+            Role::User => "<|turn>user\n".to_string(),
+            Role::Assistant => "<|turn>model\n".to_string(),
         }
     }
 
-    fn turn_end(&self, role: &SlmRole) -> String {
+    fn turn_end(&self, role: &Role) -> String {
         match role {
             _ => "<turn|>\n".to_string(),
         }
@@ -71,8 +70,8 @@ impl SlmFormatter for GemmaFormatter {
         }
     }
 
-    fn tool_style(&self) -> SlmToolStyle {
-        SlmToolStyle::Inline
+    fn tool_style(&self) -> ToolStyle {
+        ToolStyle::Inline
     }
 
     fn format_tool_call(&self, name: &str, arguments: &str) -> String {

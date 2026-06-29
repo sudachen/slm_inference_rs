@@ -1,8 +1,8 @@
-use crate::SlmRole;
+use crate::models::{Gemma4Flavor, GemmaFormatter, Llama3Formatter, MistralFlavor, MistralFormatter, Phi4Formatter, Qwen25Formatter};
+use super::{Role, ModelFormatterError};
 
-/// Describes how a model interleaves tool calls and tool responses within a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SlmToolStyle {
+pub enum ToolStyle {
     /// Tool calls and responses are embedded as special markup blocks *inside* the
     /// current assistant or user turn (e.g. Gemma 4, Mistral, Qwen 2.5).
     Inline,
@@ -15,18 +15,18 @@ pub enum SlmToolStyle {
 ///
 /// Each model family wraps messages in its own delimiter scheme (ChatML, Llama 3
 /// header tokens, Mistral `[INST]`, etc.).  Implementing this trait allows
-/// [`SlmSimpleOracle`](crate::SlmSimpleOracle) to stay model-agnostic.
+/// [`SimpleOracle`](SimpleOracle) to stay model-agnostic.
 ///
-/// See [`SlmDynamicFormatter`](crate::SlmDynamicFormatter) for a runtime-selectable
+/// See [`DynamicFormatter`](DynamicFormatter) for a runtime-selectable
 /// dispatcher over the built-in formatters.
-pub trait SlmFormatter {
+pub trait Formatter {
     /// Optional byte-order mark / BOS token prepended before the very first turn.
     /// Returns `None` for models that start directly with the first role delimiter.
     fn bos(&self) -> Option<&str>;
     /// Returns the opening delimiter for a turn with the given role.
-    fn turn_start(&self, role: &SlmRole) -> String;
+    fn turn_start(&self, role: &Role) -> String;
     /// Returns the closing delimiter for a turn with the given role.
-    fn turn_end(&self, role: &SlmRole) -> String;
+    fn turn_end(&self, role: &Role) -> String;
 
     // --- Reasoning Control ---
 
@@ -99,5 +99,107 @@ pub trait SlmFormatter {
             Some(thinking)
         };
         (self.strip_tags(&cleaned).trim().to_string(), thinking)
+    }
+}
+
+pub enum DynamicFormatter {
+    Gemma(GemmaFormatter),
+    Llama3(Llama3Formatter),
+    Mistral(MistralFormatter),
+    Qwen25(Qwen25Formatter),
+    Phi4(Phi4Formatter),
+}
+
+impl TryFrom<&str> for DynamicFormatter {
+    type Error = ModelFormatterError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "llama3" => Ok(Self::Llama3(Llama3Formatter)),
+            "gemma4" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::Vanilla,
+                true,
+            ))),
+            "gemma4-google" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::GoogleOfficial,
+                true,
+            ))),
+            "gemma4-unsloth" => Ok(Self::Gemma(GemmaFormatter::new(
+                Gemma4Flavor::UnslothFixed,
+                true,
+            ))),
+            "mistral" => Ok(Self::Mistral(MistralFormatter::new(
+                MistralFlavor::V3Tekken,
+                true,
+            ))),
+            "mistral-legacy" => Ok(Self::Mistral(MistralFormatter::new(
+                MistralFlavor::Legacy,
+                true,
+            ))),
+            "qwen25" => Ok(Self::Qwen25(Qwen25Formatter::new(true))),
+            "phi4" => Ok(Self::Phi4(Phi4Formatter::new(true))),
+            _ => Err(ModelFormatterError::UnknownModelFormatter(
+                value.to_string(),
+            )),
+        }
+    }
+}
+
+impl DynamicFormatter {
+    fn deref(&self) -> &dyn Formatter {
+        match self {
+            Self::Llama3(f) => f,
+            Self::Gemma(f) => f,
+            Self::Mistral(f) => f,
+            Self::Qwen25(f) => f,
+            Self::Phi4(f) => f,
+        }
+    }
+}
+
+impl Formatter for DynamicFormatter {
+    fn bos(&self) -> Option<&str> {
+        self.deref().bos()
+    }
+
+    fn turn_start(&self, role: &Role) -> String {
+        self.deref().turn_start(role)
+    }
+
+    fn turn_end(&self, role: &Role) -> String {
+        self.deref().turn_end(role)
+    }
+
+    fn reasoning_bounds(&self) -> Option<(&str, &str)> {
+        self.deref().reasoning_bounds()
+    }
+
+    fn wrap_reasoning(&self, content: &str) -> String {
+        self.deref().wrap_reasoning(content)
+    }
+
+    fn reasoning_trigger(&self) -> Option<&str> {
+        self.deref().reasoning_trigger()
+    }
+
+    fn tool_style(&self) -> ToolStyle {
+        self.deref().tool_style()
+    }
+
+    fn format_tool_call(&self, name: &str, arguments_json: &str) -> String {
+        self.deref().format_tool_call(name, arguments_json)
+    }
+
+    fn format_tool_response(&self, tool_name: &str, response_content: &str) -> String {
+        self.deref()
+            .format_tool_response(tool_name, response_content)
+    }
+
+    fn clean(&self, text: &str) -> String {
+        self.deref().clean(text)
+    }
+
+    fn strip_tags(&self, text: &str) -> String {
+        self.deref().strip_tags(text)
     }
 }
