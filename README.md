@@ -32,36 +32,34 @@ workspace builds on. No runtime dependencies — backends are chosen by the cons
 
 | Item | Description |
 |---|---|
-| `SlmOracle` | High-level conversational interface |
-| `SlmJsonOracle` | Extension of `SlmOracle` for structured JSON generation |
-| `SlmSimpleOracle<I, F>` | Standard `SlmOracle` implementation |
-| `SlmOracleState` | Snapshot returned by `save()` for context branching |
-| `SlmFormatter` | Chat-template trait (BOS, turn delimiters, tool calling, reasoning bounds) |
-| `SlmDynamicFormatter` | Runtime formatter selected by name string |
-| `SlmAnswer` | Typed response; carries optional chain-of-thought `.thought()` |
-| `SlmContext` | Low-level KV-cache / decode / sample interface |
-| `SlmContextBuilder` | Builder for configuring and instantiating an `SlmContext` |
-| `SlmKvType` | KV-cache quantization format (Q4, Q5, Q6, Q8, F16, F32, …) |
-| `SlmInference` / `SlmSimpleInference` | Autoregressive token-generation loop |
-| `SlmAction` / `SlmBoxedAction` | Generation control callbacks (token limit, streaming, …) |
-| `SlmConstraint` | Token-level filter for constrained decoding (e.g. JSON grammar) |
-| `SlmEditLevel` | Declares which KV-cache editing operations a backend supports |
-| `SlmHfModel` | Hugging Face model descriptor (repo, filename, formatter name) |
+| `Assistant` | High-level conversational interface |
+| `State` | Snapshot returned by `save()` for context branching |
+| `Formatter` | Chat-template trait (BOS, turn delimiters, tool calling, reasoning bounds) |
+| `DynamicFormatter` | Runtime formatter selected by name string |
+| `Answer` | Typed response; carries optional chain-of-thought `.thought()` |
+| `Context` | Low-level KV-cache / decode / sample interface |
+| `ContextBuilder` | Builder for configuring and instantiating a `Context` |
+| `KvType` | KV-cache quantization format (Q4, Q5, Q6, Q8, F16, F32, …) |
+| `Inference` / `SimpleInference` | Autoregressive token-generation loop |
+| `Action` / `BoxedAction` | Generation control callbacks (token limit, streaming, …) |
+| `Constraint` | Token-level filter for constrained decoding (e.g. JSON grammar) |
+| `EditLevel` | Declares which KV-cache editing operations a backend supports |
+| `HfModel` | Hugging Face model descriptor (repo, filename, formatter name) |
 
-**`SlmOracle` quick example:**
+**`Assistant` quick example:**
 
 ```rust
-oracle.system("You are a helpful assistant.")?;
-oracle.user("Some context...")?;
+assistant.system("You are a helpful assistant.")?;
+assistant.user("Some context...")?;
 
-let answer = oracle.ask(false, "What is X?", None)?;   // plain generation
-let answer = oracle.ask(true,  "Reason about X", None)?; // chain-of-thought
+let answer = assistant.ask(false, "What is X?", None)?;   // plain generation
+let answer = assistant.ask(true,  "Reason about X", None)?; // chain-of-thought
 
-println!("{}", answer);                                  // final answer
-println!("{:?}", answer.thought());                      // reasoning trace
+println!("{}", answer);                                    // final answer
+println!("{:?}", answer.thought());                        // reasoning trace
 ```
 
-**`SlmOracle` methods:**
+**`Assistant` methods:**
 
 | Method | Retains context? | Description |
 |---|---|---|
@@ -70,26 +68,33 @@ println!("{:?}", answer.thought());                      // reasoning trace
 | `assistant(text)` | ✓ | Prefill an assistant turn (history injection) |
 | `ask(think, text, action)` | ✗ | Generate a reply; context rolls back after |
 | `turn(text, think, action)` | ✓ | Generate a reply; exchange kept in context |
+| `json_ask(think, text, action)` | ✗ | Constrained JSON generation; returns `Answer<Vec<T>>` |
+| `ask_values(think, text, action)` | ✗ | Constrained JSON generation; returns `Vec<T>` directly |
+| `choose(think, text, action)` | ✗ | Constrained enum selection; returns `Answer<T>` |
+| `choose_value(think, text, action)` | ✗ | Constrained enum selection; returns `T` directly |
 | `generate(role, text, think, reset, action, constraint)` | configurable | Low-level entry point |
-| `save()` → `SlmOracleState` | — | Snapshot current turn position |
+| `save()` → `State` | — | Snapshot current turn position |
 | `rollback(state)` | — | Restore to a previous snapshot |
 | `clear()` | — | Reset context and turn state |
 | `set_max_answer_tokens(n)` | — | Override the per-call token budget (default 1 024) |
+| `tokens_n()` | — | Total number of tokens currently in the context |
+| `vocab()` | — | Reference to the active `Vocab` |
+| `formatter()` | — | Reference to the active `Formatter` |
 
-**`SlmJsonOracle::json_ask` — structured JSON extraction:**
+**`Assistant::json_ask` — structured JSON extraction:**
 
 ```rust
 #[derive(Deserialize, schemars::JsonSchema)]
 struct EntityCard { term: String, category: String, clue: String }
 
-let cards: Vec<EntityCard> = oracle.json_ask(
+let cards: Vec<EntityCard> = assistant.ask_values(
     false,
     "Extract all named entities.",
-    Some(SlmAction::print_token()),
+    Action::print_token(),
 )?;
 ```
 
-**Supported chat templates (`SlmDynamicFormatter`):**
+**Supported chat templates (`DynamicFormatter`):**
 
 | Key | Model family |
 |---|---|
@@ -111,11 +116,11 @@ via the `llama-cpp-sys-2` crate.
 
 | `slm_inference` trait | This crate's type |
 |---|---|
-| `SlmModelConfig` | `ModelConfig` |
-| `SlmModel` | `Model` |
-| `SlmContextBuilder` | `Builder` |
-| `SlmContext` | `Context` |
-| `SlmBatch` / `SlmToken` | `Batch` / `Token` |
+| `ModelConfig` | `ModelConfig` |
+| `Model` | `Model` |
+| `ContextBuilder` | `Builder` |
+| `Context` | `Context` |
+| `Batch` | `Batch` |
 
 **Accelerator features:**
 
@@ -161,8 +166,8 @@ FB2 book format reader, analogous to `epubscan`.
 
 A shared library crate (`examples/backend`) used by all example binaries. Provides:
 
-- `selector(model, backend, cpu)` — instantiates the requested model on the requested backend and returns a `Box<dyn SlmOracle>`
-- `select_model(model_id)` — maps a `ModelId` variant to an `SlmHfModel` descriptor
+- `selector(model, backend, cpu)` — instantiates the requested model on the requested backend and returns an `slm::Assistant`
+- `select_model(model_id)` — maps a `ModelId` variant to an `HfModel` descriptor
 - `ModelId` / `BackendId` — `clap`-compatible enums for CLI argument parsing
 
 **Supported models (`ModelId`):**
@@ -194,7 +199,7 @@ fact-checking and structured entity extraction.
 - `yes-no` — reads EPUB sections into the context, then answers a set of Yes/No questions
   from a JSON file; supports optional chain-of-thought via `--think`
 - `ents` — reads EPUB sections and extracts named entities (characters, locations,
-  organizations, neologisms) as structured JSON using `SlmJsonOracle::json_ask`
+  organizations, neologisms) as structured JSON using `Assistant::ask_values`
 
 **CLI flags (global):**
 
