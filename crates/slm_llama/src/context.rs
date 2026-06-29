@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 unsafe impl Send for Context {}
 
-#[derive(Clone)]
 pub struct Context {
     vocab_ptr: *const llama_cpp_sys_2::llama_vocab,
     n_batch: u32,
@@ -152,12 +151,37 @@ impl slm::Context for Context {
         Ok(())
     }
 
-    fn dump(&mut self) -> Result<Vec<u8>, slm::ContextError> {
-        todo!()
+    fn dump(&mut self, fork_id: usize) -> Result<Vec<u8>, slm::ContextError> {
+        let ctx = self.ctx.get_ptr();
+        let size = unsafe { llama_cpp_sys_2::llama_state_seq_get_size(ctx, fork_id as i32) };
+        if size == 0 {
+            return Ok(vec![]);
+        }
+        let mut data = vec![0u8; size];
+        unsafe {
+            llama_cpp_sys_2::llama_state_seq_get_data(ctx, data.as_mut_ptr(), size, fork_id as i32)
+        };
+        Ok(data)
     }
 
-    fn restore(&mut self, _data: Vec<u8>) -> Result<(), slm::ContextError> {
-        todo!()
+    fn restore(&mut self, fork_id: usize, data: &[u8]) -> Result<(), slm::ContextError> {
+        let ctx = self.ctx.get_ptr();
+        let memory = unsafe { llama_cpp_sys_2::llama_get_memory(ctx) };
+        if memory.is_null() {
+            return Err(slm::FfiError::NullPtr.into());
+        }
+        unsafe { llama_cpp_sys_2::llama_memory_seq_rm(memory, fork_id as i32, -1, -1) };
+        if data.len() > 0 {
+            unsafe {
+                llama_cpp_sys_2::llama_state_seq_set_data(
+                    ctx,
+                    data.as_ptr(),
+                    data.len(),
+                    fork_id as i32,
+                )
+            };
+        }
+        Ok(())
     }
 
     fn edit_level(&self) -> slm::EditLevel {

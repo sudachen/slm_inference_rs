@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 unsafe impl Send for Context {}
 
-#[derive(Clone)]
 pub struct Context {
     vocab_ptr: *const slm_ikllama_sys::llama_vocab,
     n_batch: u32,
@@ -163,12 +162,40 @@ impl slm::Context for Context {
         Ok(slm::Pos::new(next_pos as usize, start_pos.fork_id))
     }
 
-    fn dump(&mut self) -> Result<Vec<u8>, slm::ContextError> {
-        todo!()
+    fn dump(&mut self, fork_id: usize) -> Result<Vec<u8>, slm::ContextError> {
+        let ctx = self.ctx.get_ptr();
+        let flags = 0; // copy to memory
+        let size = unsafe { slm_ikllama_sys::llama_state_seq_get_size(ctx, fork_id as i32, flags) };
+        if size == 0 {
+            return Ok(vec![]);
+        }
+        let mut data = vec![0u8; size];
+        unsafe {
+            slm_ikllama_sys::llama_state_seq_get_data(
+                ctx,
+                data.as_mut_ptr(),
+                size,
+                fork_id as i32,
+                flags,
+            )
+        };
+        Ok(data)
     }
 
-    fn restore(&mut self, _data: Vec<u8>) -> Result<(), slm::ContextError> {
-        todo!()
+    fn restore(&mut self, fork_id: usize, data: &[u8]) -> Result<(), slm::ContextError> {
+        let ctx = self.ctx.get_ptr();
+        let flags = 0; // copy to memory
+        unsafe { slm_ikllama_sys::llama_kv_cache_seq_rm(ctx, fork_id as i32, -1, -1) };
+        unsafe {
+            slm_ikllama_sys::llama_state_seq_set_data(
+                ctx,
+                data.as_ptr(),
+                data.len(),
+                fork_id as i32,
+                flags,
+            )
+        };
+        Ok(())
     }
 
     fn edit_level(&self) -> slm::EditLevel {
