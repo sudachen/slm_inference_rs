@@ -1,5 +1,10 @@
 use crate::slm::{Formatter, ToolStyle, Role};
 
+/// [`Formatter`] for Microsoft Phi-4 models.
+///
+/// Uses ChatML-style role tokens with special Phi-4 markup.
+/// Function calling uses plain JSON format. Supports reasoning distillations
+/// with standard XML tags.
 pub struct Phi4Formatter {
     thinking: bool,
 }

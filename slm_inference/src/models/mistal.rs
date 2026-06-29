@@ -1,6 +1,10 @@
 use crate::slm::{Formatter, ToolStyle, Role};
 
-
+/// [`Formatter`] for Mistral models.
+///
+/// Supports both modern Mistral v3 (Tekken tokenizer) and legacy v1/v2 templates.
+/// Uses `[INST]` / `[/INST]` delimiters and `[SYSTEM_PROMPT]` for system messages.
+/// Tool calls use `[TOOL_CALLS]` / `[/TOOL_CALLS]` markup.
 pub struct MistralFormatter {
     flavor: MistralFlavor,
     thinking: bool,

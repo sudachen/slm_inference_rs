@@ -1,5 +1,10 @@
 use crate::slm::{Formatter, ToolStyle, Role};
 
+/// [`Formatter`] for Alibaba Qwen 2.5 models.
+///
+/// Uses ChatML format with `<|im_start|>` / `<|im_end|>` delimiters.
+/// Supports native tool role for responses. Reasoning models use
+/// standard XML tags for chain-of-thought.
 pub struct Qwen25Formatter {
     thinking: bool,
 }

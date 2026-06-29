@@ -16,7 +16,7 @@ pub enum Answer<T> {
     /// supports reasoning and [`split_thought`](Self::split_thought) has been called.
     // (answer, thinking)
     Complete(T, Option<String>),
-    /// Generation was stopped early by an [`Action::Delay`] callback.
+    /// Generation was stopped early by an [`Action::Delay`](crate::slm::Action::Delay) callback.
     /// The accumulated text so far is valid but the sequence is not yet closed.
     Partial(T),
     /// Generation was interrupted (e.g. token limit exceeded) before a natural stop.
@@ -25,7 +25,7 @@ pub enum Answer<T> {
 
 impl Answer<String> {
     /// Extract any chain-of-thought content from the text using the formatter's
-    /// [`reasoning_bounds`](Formatter::reasoning_bounds) tags, storing it in the
+    /// [`reasoning_bounds`](crate::slm::Formatter::reasoning_bounds) tags, storing it in the
     /// `thinking` field of [`Answer::Complete`].
     ///
     /// Has no effect on `Partial` or `Incomplete` variants, or if a thinking string

@@ -6,18 +6,26 @@ use std::sync::{Mutex,OnceLock};
 use llguidance::api::TopLevelGrammar;
 use super::llg_lark::{ParserRegistry, LarkConstraint, json_schema_to_lark, variants_to_lark};
 
+/// Low-level tokenizer interface for vocabulary implementations.
+///
+/// Provides the minimal tokenization operations required by [`SimpleVocab`].
 pub trait VobTokenizer {
     fn token_to_bytes(&self, token: i32, special: bool) -> Result<Vec<u8>, TokenToStringError>;
     fn str_to_tokens(&self, str: &str, add_special: bool, parse_special: bool) -> Result<Vec<i32>, StringToTokenError>;
     fn tok_env(&self) -> &TokEnv;
 }
 
+/// Concrete implementation of [`Vocab`] backed by a [`VobTokenizer`].
+///
+/// Caches compiled `llguidance` parsers for constraint generation and
+/// delegates tokenization to the wrapped tokenizer.
 pub struct SimpleVocab<T: VobTokenizer + Send + Sync> {
     tokenizer: T,
     registry: OnceLock<Mutex<ParserRegistry>>
 }
 
 impl<T: VobTokenizer + Send + Sync> SimpleVocab<T> {
+    /// Create a new [`SimpleVocab`] wrapping the given tokenizer.
     pub fn new(tokenizer: T) -> Self {
         Self {
             tokenizer,
@@ -25,6 +33,10 @@ impl<T: VobTokenizer + Send + Sync> SimpleVocab<T> {
         }
     }
 
+    /// Get or create the parser registry for this vocabulary.
+    ///
+    /// The registry is lazily initialized on first call and caches
+    /// compiled parsers for constraint generation.
     pub fn registry(&self) -> &Mutex<ParserRegistry> {
         self.registry.get_or_init(|| {
             let tok_env = self.tokenizer.tok_env();
@@ -90,6 +102,10 @@ impl<T: VobTokenizer + Send + Sync> Vocab for SimpleVocab<T> {
     }
 }
 
+/// Simple implementation of llguidance's [`TokenizerEnv`] trait.
+///
+/// Builds a [`TokTrie`] from a flat vocabulary list and provides the
+/// tokenization methods required by the `llguidance` library.
 pub struct SimpleTokEnv {
     pub trie: TokTrie,
     pub vocab_size: usize,

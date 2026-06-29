@@ -1,6 +1,6 @@
 use crate::slm::{Formatter, ToolStyle, Role};
 
-/// [`SlmFormatter`] for Google Gemma 4 models.
+/// [`Formatter`] for Google Gemma 4 models.
 ///
 /// Uses Gemma's `<|turn>` / `<turn|>` turn delimiters and `<|channel>thought` /
 /// `<channel|>` reasoning tags.  The exact format varies by [`Gemma4Flavor`].

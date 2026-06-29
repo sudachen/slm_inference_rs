@@ -5,13 +5,17 @@ use tracing::debug;
 use anyhow::Context as _;
 use super::{ModelConfig,Model};
 
+/// Specification for a HuggingFace model to download and load.
+///
+/// Provides a convenient way to reference models by their repository ID and filename,
+/// with automatic download from the HuggingFace Hub if not locally cached.
 #[derive(Copy,Clone)]
 pub struct HfModel {
     /// HuggingFace repository identifier (e.g. `"bartowski/Llama-3.2-3B-Instruct-GGUF"`).
     pub repo: &'static str,
     /// Filename within the repository (e.g. `"Llama-3.2-3B-Instruct-Q8_0.gguf"`).
     pub filename: &'static str,
-    /// Formatter name string accepted by [`SlmDynamicFormatter`](crate::SlmDynamicFormatter)
+    /// Formatter name string accepted by [`DynamicFormatter`](crate::slm::DynamicFormatter)
     /// (e.g. `"llama3"`, `"qwen25"`).
     pub formatter: &'static str,
 }
@@ -22,6 +26,7 @@ impl HfModel {
         get_or_download_model(self.repo, self.filename)
     }
 
+    /// Load the model using the provided configuration.
     #[allow(dead_code)]
     pub fn load<Config>(self, cfg: Config) -> anyhow::Result<impl Model>
     where

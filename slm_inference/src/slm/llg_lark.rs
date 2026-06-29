@@ -1,3 +1,12 @@
+//! Integration with the `llguidance` library for constrained generation.
+//!
+//! This module provides:
+//!
+//! - [`LarkConstraint`] - Wrapper around llguidance's [`Constraint`] for enforcing Lark grammars
+//! - [`variants_to_lark`] - Converts enum variant lists to Lark grammars
+//! - [`json_schema_to_lark`] - Converts JSON schemas to Lark grammars
+//! - [`ParserRegistry`] - Caches compiled parsers keyed by Rust type ID
+
 use std::any::TypeId;
 use std::collections::HashMap;
 use llguidance::{Constraint, ParserFactory, TokenParser};
@@ -7,7 +16,7 @@ use llguidance::toktrie::{InferenceCapabilities, TokEnv};
 use serde_json::Value;
 use super::{ConstraintStep, Constraint as SlmConstraint, SamplingError};
 
-/// An [`SlmConstraint`] that enforces a Lark grammar during token sampling.
+/// A [`Constraint`] that enforces a Lark grammar during token sampling.
 ///
 /// Wraps a `llguidance` [`Constraint`] compiled from a [`TopLevelGrammar`].
 /// Logit masking is performed by the underlying `Constraint::compute_mask` call.
@@ -75,6 +84,10 @@ impl SlmConstraint for LarkConstraint {
     }
 }
 
+/// Convert a list of enum variant strings into a Lark grammar for constrained generation.
+///
+/// The grammar enforces that the model output must match one of the provided variants.
+/// If `reasoning_bounds` is provided, the grammar allows optional reasoning content.
 pub fn variants_to_lark(variants: Vec<String>, reasoning_bounds: Option<(String,String)>) -> Result<String, &'static str> {
     if variants.is_empty() {
         return Err("The variants list must have at least one variant defined");
@@ -104,8 +117,11 @@ pub fn variants_to_lark(variants: Vec<String>, reasoning_bounds: Option<(String,
 }
 
 
-/// Converts a single JSON object schema into a Lark grammar
-/// designed to parse a JSON array of these objects.
+/// Convert a JSON object schema into a Lark grammar for constrained generation.
+///
+/// The grammar enforces that the model output must be a JSON array of objects
+/// matching the provided schema. If `reasoning_bounds` is provided, the grammar
+/// allows optional reasoning content before the JSON array.
 pub fn json_schema_to_lark(schema: Value, reasoning_bounds: Option<(String,String)>) -> Result<String, &'static str> {
     // Validate that the provided schema represents a JSON object (struct element)
     if schema.get("type").and_then(|t| t.as_str()) != Some("object") {

@@ -15,7 +15,7 @@ pub enum ToolStyle {
 ///
 /// Each model family wraps messages in its own delimiter scheme (ChatML, Llama 3
 /// header tokens, Mistral `[INST]`, etc.).  Implementing this trait allows
-/// [`SimpleOracle`](SimpleOracle) to stay model-agnostic.
+/// [`Oracle`](crate::slm::Assistant) to stay model-agnostic.
 ///
 /// See [`DynamicFormatter`](DynamicFormatter) for a runtime-selectable
 /// dispatcher over the built-in formatters.
@@ -75,7 +75,7 @@ pub trait Formatter {
     }
 
     /// Split `text` into `(clean_content, Option<thinking>)` by extracting any
-    /// reasoning block demarcated by [`reasoning_bounds`](Self::reasoning_bounds).
+    /// reasoning block demarcated by [`reasoning_bounds`](crate::slm::Formatter::reasoning_bounds).
     fn strip_thought(&self, text: &str) -> (String, Option<String>) {
         let mut cleaned = text.to_string();
         let mut thinking = String::new();
@@ -102,6 +102,10 @@ pub trait Formatter {
     }
 }
 
+/// Runtime-selectable formatter that dispatches to a concrete model formatter.
+///
+/// Created from a string name via [`TryFrom`] and delegates all [`Formatter`] trait
+/// methods to the underlying concrete formatter.
 pub enum DynamicFormatter {
     Gemma(GemmaFormatter),
     Llama3(Llama3Formatter),

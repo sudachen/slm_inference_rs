@@ -1,3 +1,15 @@
+//! Core inference primitives for small language models.
+//!
+//! This module provides a model-agnostic abstraction layer for autoregressive
+//! text generation, including:
+//!
+//! - [`Context`] and [`ContextBuilder`] for low-level KV-cache management
+//! - [`Vocab`] for tokenization and vocabulary operations
+//! - [`Formatter`] for model-specific chat templates
+//! - [`Assistant`] for high-level conversational inference
+//! - [`Inference`] trait for generation engines
+//! - [`Constraint`] for structured output generation
+
 pub mod context;
 pub mod vocab;
 pub mod model;
@@ -5,13 +17,13 @@ pub mod answer;
 pub mod formatter;
 pub mod inference;
 pub mod simple_inference;
-pub mod oracle;
+pub mod assistant;
 pub mod hf_model;
 pub mod errors;
 
 mod llg_lark;
 mod simple_vocab;
-mod oracle_async;
+mod async_assistant;
 
 pub use context::*;
 pub use vocab::*;
@@ -20,12 +32,16 @@ pub use model::*;
 pub use answer::*;
 pub use inference::*;
 pub use simple_inference::*;
-pub use oracle::*;
+pub use assistant::*;
 pub use simple_vocab::*;
 pub use hf_model::*;
 pub use errors::*;
-//pub use oracle_async::*;
+//pub use async_assistant::*;
 
+/// Position in the KV cache identified by token index and fork ID.
+///
+/// Used to track locations within the cache for rollback operations
+/// and multi-sequence (forked) inference.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Pos {
     /// Zero-based index of the token slot within the sequence.
@@ -37,14 +53,15 @@ pub struct Pos {
 
 #[allow(dead_code)]
 impl Pos {
+    /// Create a new position with the given token index and fork ID.
+    pub fn new(token_pos: usize, fork_id: usize) -> Pos {
+        Self { token_pos, fork_id }
+    }
     fn fork_id(&self) -> usize {
         self.fork_id
     }
     fn token_pos(&self) -> usize {
         self.token_pos
-    }
-    pub fn new(token_pos: usize, fork_id: usize) -> Pos {
-        Self { token_pos, fork_id }
     }
 }
 

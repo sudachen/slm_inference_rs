@@ -1,14 +1,19 @@
 use super::{
     Action, Answer, BoxedAction, BoxedConstraint, ComputationZone, InferenceError,
-    NullInference, Oracle, Role, SavePoint,
+    NullInference, Assistant, Role, SavePoint,
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
 
+/// Semaphore for CPU-bound inference (one concurrent operation).
 static CPU_ZONE: Semaphore = Semaphore::const_new(1);
+/// Semaphore for GPU-bound inference (one concurrent operation).
 static GPU_ZONE: Semaphore = Semaphore::const_new(1);
 
-impl Oracle {
+impl Assistant {
+    /// Async version of [`Assistant::generate`] that offloads blocking inference to a thread pool.
+    ///
+    /// Uses semaphores to limit concurrent CPU/GPU operations to one per zone.
     pub async fn async_generate(
         &mut self,
         role: &Role,
@@ -49,6 +54,7 @@ impl Oracle {
         self.generate_answer(answer, think, reset)
     }
 
+    /// Async version of [`Assistant::ask`] that offloads blocking inference to a thread pool.
     pub async fn async_ask(
         &mut self,
         think: bool,

@@ -3,9 +3,12 @@ use super::{
     SamplingError
 };
 
+/// Hardware zone where inference computation is performed.
 #[derive(Copy,Clone,Debug)]
 pub enum ComputationZone {
+    /// Computation on CPU.
     CPU,
+    /// Computation on GPU.
     GPU,
 }
 
@@ -91,7 +94,7 @@ pub trait Context {
     fn drop(&mut self, fork_id: usize) -> Result<(), ContextError>;
 
     /// Removes all tokens that were added from the `pos`, effectively rolling the
-    /// KV cache back to that position.  Returns the [`SlmPos`] at which the next
+    /// KV cache back to that position.  Returns the [`Pos`] at which the next
     /// token should be inserted.
     fn truncate(&mut self, pos: &Pos) -> Result<Pos, ContextError>;
 
@@ -110,8 +113,8 @@ pub trait Context {
 
     /// Reports which in-place editing operations this context supports.
     ///
-    /// The value is used by [`SlmSimpleInference`] to pick the cheapest rollback
-    /// strategy.  See [`SlmEditLevel`] for the available levels.
+    /// The value is used by [`SimpleInference`] to pick the cheapest rollback
+    /// strategy.  See [`EditLevel`] for the available levels.
     fn edit_level(&self) -> EditLevel;
 }
 

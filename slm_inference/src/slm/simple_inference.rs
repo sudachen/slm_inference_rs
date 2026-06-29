@@ -3,6 +3,9 @@ use std::sync::{Arc, Mutex};
 use super::{Action, Answer, Batch, BoxedAction, BoxedVocab, BoxedConstraint, Constraint, ConstraintStep, Context, EditLevel, Inference, InferenceError, Pos, ComputationZone, DecodeError};
 use tracing::error;
 
+/// Snapshot of a context's state for multi-fork inference.
+///
+/// Stores the serialized KV cache, position, and sequence metadata.
 #[derive(Clone,Debug,Default)]
 struct ContextState {
     id: u64,
@@ -12,6 +15,10 @@ struct ContextState {
     seq_id: usize,
 }
 
+/// Shared core that manages the underlying [`Context`] and batch operations.
+///
+/// Encapsulates the mutable state (KV cache, batch buffer) and provides
+/// thread-safe access through an `Arc<Mutex<>>`.
 struct InferenceCore<C: Context + Send> {
     context: C,
     batch: C::Batch,
@@ -96,6 +103,11 @@ impl<C: Context + Send> InferenceCore<C> {
     }
 }
 
+/// Default implementation of the [`Inference`] trait.
+///
+/// Provides autoregressive text generation with batching, KV-cache management,
+/// and constraint support. Can be shared across multiple inference sessions
+/// via [`SimpleInference::share`].
 pub struct SimpleInference<C: Context + Send> {
     state_id: u64,
     context: Arc<Mutex<InferenceCore<C>>>,
@@ -106,6 +118,7 @@ pub struct SimpleInference<C: Context + Send> {
 }
 
 impl<C: Context + Send> SimpleInference<C> {
+    /// Create a new [`SimpleInference`] from a context.
     pub fn new(context: C) -> Result<Self, InferenceError> {
         let vocab = context.vocab().clone();
         let zone = context.zone();
@@ -118,6 +131,8 @@ impl<C: Context + Send> SimpleInference<C> {
             zone,
         })
     }
+    /// Create a shared clone that uses the same underlying context but
+    /// maintains independent token state.
     pub fn share(&self) -> SimpleInference<C> {
         let context = self.context.clone();
         let state_id = context.lock().unwrap().allocate();

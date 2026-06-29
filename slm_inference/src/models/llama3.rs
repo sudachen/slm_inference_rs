@@ -1,4 +1,10 @@
 use crate::slm::{Formatter, ToolStyle, Role};
+
+/// [`Formatter`] for Meta Llama 3 models.
+///
+/// Uses Llama 3's `<|start_header_id|>` / `<|end_header_id|>` header tokens
+/// and `<|eot_id|>` end-of-turn marker. Supports native reasoning with
+/// `<|thinking|>` / `<|eot_id|>` tags.
 pub struct Llama3Formatter;
 
 impl Formatter for Llama3Formatter {

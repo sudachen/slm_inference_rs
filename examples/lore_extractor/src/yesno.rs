@@ -19,7 +19,7 @@ pub enum YesOrNo {
 }
 
 #[derive(Parser, Debug)]
-pub struct YesNoArgs {
+pub struct YesNo {
     #[arg(short, long)]
     pub think: bool,
     #[arg(short, long)]
@@ -30,8 +30,8 @@ pub struct YesNoArgs {
     pub input: Vec<PathBuf>,
 }
 
-impl YesNoArgs {
-    pub fn run(&self, oracle: &mut slm::Oracle) -> Result<()> {
+impl YesNo {
+    pub fn run(&self, assistant: &mut slm::Assistant) -> Result<()> {
         println!(
             "Answer Yes/No for questions over {} file(s):",
             self.input.len()
@@ -40,13 +40,13 @@ impl YesNoArgs {
             .create(true)
             .append(true)
             .open(self.output.clone().unwrap_or("entities.json".into()))?;
-        oracle.system("You are a precise tool that answers only \"Yes\" or \"No\" without any other symbols based on the text:")?;
+        assistant.system("You are a precise tool that answers only \"Yes\" or \"No\" without any other symbols based on the text:")?;
         for (index, file) in self.input.iter().enumerate() {
             println!("  File {}: {:?}", index + 1, file);
             let epub = EpubScan::from_file(file)?;
             for section in epub.sections().iter().take(2) {
                 println!("    Section: {}", section.title().unwrap_or(""));
-                oracle.user(&section.text());
+                assistant.user(&section.text());
             }
         }
         let questions: Vec<YesNoQuest> = self
@@ -69,7 +69,7 @@ impl YesNoArgs {
             let question = q.question;
             let no = no + 1;
             println!("Question {no}: {question}");
-            let answer : slm::Answer<YesOrNo> = oracle.choose(self.think, &question, None)?;
+            let answer : slm::Answer<YesOrNo> = assistant.choose(self.think, &question, None)?;
             let t = answer.thought().unwrap_or("");
             if t.len() > 0 {
                 println!("-\n{t}\n-");

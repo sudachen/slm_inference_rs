@@ -5,7 +5,7 @@ use epubscan::EpubScan;
 use slm_inference::slm;
 
 #[derive(Parser, Debug)]
-pub struct EntsArgs {
+pub struct Ents {
     #[arg(short, long)]
     pub think: bool,
     #[arg(num_args(1))]
@@ -21,20 +21,20 @@ pub struct EntityCard {
 }
 
 
-impl EntsArgs {
-    pub fn run(&self, oracle: &mut slm::Oracle) -> anyhow::Result<()> {
+impl Ents {
+    pub fn run(&self, assistant: &mut slm::Assistant) -> anyhow::Result<()> {
         let input = self.input[1].clone();
         println!("Input: {:?}", input);
         let epub = EpubScan::from_file(&input)?;
-        oracle.set_max_answer_tokens(4096);
-        oracle.system(SYSTEM_PROMPT)?;
-        let pos = oracle.save()?;
+        assistant.set_max_answer_tokens(4096);
+        assistant.system(SYSTEM_PROMPT)?;
+        let pos = assistant.save()?;
         for section in epub.sections()[1 .. 2].iter() {
             println!("Section: {}", section.title().unwrap_or(""));
-            oracle.user(&section.text())?;
-            let cards: Vec<EntityCard> = oracle.ask_values(self.think,ENTITY_PROMPT,slm::Action::print_token())?;
+            assistant.user(&section.text())?;
+            let cards: Vec<EntityCard> = assistant.ask_values(self.think, ENTITY_PROMPT, slm::Action::print_token())?;
             println!("{cards:?}");
-            oracle.rollback(&pos)?;
+            assistant.rollback(&pos)?;
         }
         Ok(())
     }

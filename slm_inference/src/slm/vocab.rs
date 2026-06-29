@@ -2,9 +2,10 @@ use std::any::TypeId;
 use std::sync::Arc;
 use super::{SamplingError, StringToTokenError, TokenToStringError};
 
+/// Type alias for a boxed [`Vocab`] trait object with thread-safety guarantees.
 pub type BoxedVocab = Arc<dyn Vocab + Send + Sync>;
 
-/// Instruction returned by a [`crate::Constraint`] after a sampled token is committed.
+/// Instruction returned by a [`Constraint`] after a sampled token is committed.
 ///
 /// The generation loop in [`SimpleInference`] inspects this value to decide
 /// whether to run a normal forward pass, inject deterministic tokens, or halt.
@@ -40,15 +41,19 @@ pub trait Constraint {
     fn mask(&mut self, logits: &mut [f32]) -> Result<bool, SamplingError>;
     /// Advance the constraint's state machine after `token_id` was sampled.
     ///
-    /// Returns a [`SlmConstraintStep`] telling the generation loop what to do next.
+    /// Returns a [`ConstraintStep`] telling the generation loop what to do next.
     fn forward(&mut self, token_id: i32) -> Result<ConstraintStep, SamplingError>;
     /// Synchronise the constraint state with `text` that is already present in the
     /// KV cache (e.g. a reasoning trigger prefix).
     fn prefill(&mut self, text: &str) -> Result<(), SamplingError>;
 }
 
+/// Type alias for a boxed [`Constraint`] trait object.
 pub type BoxedConstraint = Box<dyn Constraint + Send>;
 
+/// No-op constraint that allows all tokens.
+///
+/// Used as a default when no structural constraints are needed.
 pub struct Unconstrained;
 impl Constraint for Unconstrained {
     fn mask(&mut self, _logits: &mut [f32]) -> Result<bool, SamplingError> {
@@ -109,9 +114,14 @@ pub trait Vocab {
     }
 }
 
+/// No-op vocabulary implementation for testing or placeholder use.
+///
+/// All operations return `Unsupported` errors. Used by [`NullInference`]
+/// when a real vocabulary is not available.
 pub struct NullVocab;
 
 impl NullVocab {
+    /// Create a new boxed [`NullVocab`] instance.
     pub fn new() -> BoxedVocab {
         Arc::new(Self)
     }

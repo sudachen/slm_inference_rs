@@ -14,12 +14,12 @@ fn main() -> Result<(), anyhow::Error> {
 
     let cli = Cli::parse();
 
-    let mut oracle = selector(cli.model, cli.backend, cli.cpu)?;
+    let mut assistant = selector(cli.model, cli.backend, cli.cpu)?;
 
     match cli.command {
-        Commands::YesNo(args) => args.run(&mut oracle),
-        Commands::SayHi(args) => args.run(&mut oracle),
-        Commands::Ents(args) => args.run(&mut oracle),
+        Commands::YesNo(cmd) => cmd.run(&mut assistant),
+        Commands::SayHi(cmd) => cmd.run(&mut assistant),
+        Commands::Ents(cmd) => cmd.run(&mut assistant),
     }
 }
 
@@ -42,9 +42,9 @@ pub struct Cli {
 pub enum Commands {
     /// Extract knowledge from a text
     #[command(name = "yesno")]
-    YesNo(yesno::YesNoArgs),
+    YesNo(yesno::YesNo),
     #[command(name = "sayhi")]
-    SayHi(sayhi::SayHiArgs),
+    SayHi(sayhi::SayHi),
     #[command(name = "ents")]
-    Ents(ents::EntsArgs),
+    Ents(ents::Ents),
 }

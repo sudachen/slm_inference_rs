@@ -7,7 +7,7 @@ use strum::Display;
 pub fn setup_backend(
     config: impl slm::ModelConfig + 'static,
     model_info: slm::HfModel,
-) -> Result<slm::Oracle> {
+) -> Result<slm::Assistant> {
     let model = model_info.load(config)?;
     let mut builder = model
         .context()
@@ -18,7 +18,7 @@ pub fn setup_backend(
             .with_gen_type_kv(slm::KvType::Q6, slm::KvType::Q6)
     }
     let context = builder.build()?;
-    Ok(slm::Oracle::new(
+    Ok(slm::Assistant::new(
         context,
         slm::DynamicFormatter::try_from(model_info.formatter)?,
     )?)
@@ -53,7 +53,7 @@ pub fn selector(
     model: ModelId,
     backend: BackendId,
     cpu: bool,
-) -> Result<slm::Oracle> {
+) -> Result<slm::Assistant> {
     #[allow(unused)]
     let gpu_layers = if cpu { 0 } else { 199 };
     #[allow(unused)]

@@ -2,6 +2,11 @@ use super::{
     Answer, BoxedConstraint, BoxedInference, BoxedVocab, ComputationZone, InferenceError, NullVocab,
 };
 
+/// Type alias for an optional callback that controls generation flow.
+///
+/// The callback receives the current answer text, last token, token count,
+/// and fork ID, and returns an [`Action`] indicating whether to continue,
+/// pause, or stop generation.
 pub type BoxedAction = Option<
     Box<
         dyn FnMut(
@@ -19,10 +24,10 @@ pub type BoxedAction = Option<
 pub enum Action {
     /// Stop generation and return the accumulated text as a [`Answer::Complete`](crate::slm::Answer::Complete).
     Finish,
-    /// Stop generation and return the accumulated text as a [`Answer::Incomplete`](carte::slm::Answer::Incomplete).
+    /// Stop generation and return the accumulated text as a [`Answer::Incomplete`](crate::slm::Answer::Incomplete).
     Stop,
     /// Enqueue the sampled token for a future decode but pause generation now,
-    /// returning a [`Answer::Partial`](carte::slm::Answer::Partial).
+    /// returning a [`Answer::Partial`](crate::slm::Answer::Partial).
     /// Any subsequent prompt call will resume and eventually terminate the sequence.
     Delay,
     /// Continue generation normally; this token is accepted.
@@ -67,6 +72,12 @@ impl Action {
     }
 }
 
+/// Trait for autoregressive text generation engines.
+///
+/// Implementations handle tokenization, KV-cache management, sampling,
+/// and constraint enforcement. The trait is designed to be backend-agnostic,
+/// allowing different inference backends (CPU, GPU, etc.) to be used
+/// interchangeably.
 pub trait Inference {
     /// Tokenise `prompt` and append the tokens to the pending prefill buffer.
     ///
@@ -94,11 +105,16 @@ pub trait Inference {
     fn zone(&self) -> ComputationZone;
 }
 
+/// No-op implementation of [`Inference`] for testing or placeholder use.
+///
+/// All operations return `InferenceError::Unsupported`. Used internally
+/// by async inference to temporarily swap out the real inference engine.
 pub struct NullInference {
     vocab: BoxedVocab,
 }
 
 impl NullInference {
+    /// Create a new boxed [`NullInference`] instance.
     pub fn new() -> BoxedInference {
         let this = Self {
             vocab: NullVocab::new(),

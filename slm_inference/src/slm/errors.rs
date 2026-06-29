@@ -134,7 +134,7 @@ pub enum FfiError {
     Error(String),
 }
 
-/// Errors that can occur while constructing an [`SlmContext`](crate::SlmContext) via a builder.
+/// Errors that can occur while constructing a [`Context`](crate::slm::Context) via a builder.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ContextBuilderError {
     #[error("Ffi Error {0}")]
@@ -154,7 +154,7 @@ pub enum ContextError {
     Unsupported,
 }
 
-/// Error returned when an unrecognised formatter name is passed to [`SlmDynamicFormatter`](crate::SlmDynamicFormatter).
+/// Error returned when an unrecognised formatter name is passed to [`DynamicFormatter`](crate::slm::DynamicFormatter).
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ModelFormatterError {
     #[error("Unknown model formatter {0}")]

@@ -16,7 +16,7 @@ pub trait Model {
 /// Factory that describes how a specific model variant should be loaded.
 ///
 /// Callers typically construct a concrete config (e.g. with builder methods),
-/// then call [`load_gguf`](Self::load_gguf) to obtain a usable [`crate::SlmModel`].
+/// then call [`load_gguf`](Self::load_gguf) to obtain a usable [`Model`].
 pub trait ModelConfig {
     //type Context: Context;
     //type Model: Model<Context=Self::Context>;

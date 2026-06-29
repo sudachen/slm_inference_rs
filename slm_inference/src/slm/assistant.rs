@@ -12,30 +12,44 @@ use strum::VariantNames;
 /// Default upper bound on generated tokens per `generate` / `ask` call.
 pub const DEFAULT_MAX_ANSWER_TOKENS: usize = 1024;
 
+/// Type alias for a boxed [`Inference`] trait object.
 pub type BoxedInference = Box<dyn Inference + Send>;
+/// Type alias for a boxed [`Formatter`] trait object.
 pub type BoxedFormatter = Box<dyn Formatter + Send>;
 
-pub struct OracleState {
+/// Snapshot of an [`Assistant`]'s state for rollback/restore operations.
+///
+/// Captures the KV-cache position and active conversation role at a point in time.
+pub struct State {
     pub(crate) pos: usize,
     pub(crate) role: Option<Role>,
 }
 
-impl OracleState {
+impl State {
+    /// Create a new state snapshot.
     pub fn new(pos: usize, role: Option<Role>) -> Self {
         Self { pos, role }
     }
 }
 
-pub struct Oracle {
-    pub inference: BoxedInference,
-    pub formatter: BoxedFormatter,
-    pub max_answer_tokens: usize,
-    pub is_fresh_context: bool,
-    pub active_turn: Option<Role>,
-    pub reset_point: Option<OracleState>,
+/// High-level conversational inference interface.
+///
+/// Combines an [`Inference`] engine with a [`Formatter`] to provide turn-based
+/// chat functionality with automatic chat-template management. Supports
+/// system/user/assistant roles, tool calling, and structured output generation.
+pub struct Assistant {
+    pub(crate) inference: BoxedInference,
+    pub(crate) formatter: BoxedFormatter,
+    pub(crate) max_answer_tokens: usize,
+    pub(crate) is_fresh_context: bool,
+    pub(crate) active_turn: Option<Role>,
+    pub(crate) reset_point: Option<State>,
 }
 
-pub struct SavePoint<'a>(pub &'a mut Oracle);
+/// RAII guard that automatically rolls back an [`Assistant`] to its saved state on drop.
+///
+/// Used internally by [`Assistant::generate`] to implement the `reset` parameter.
+pub struct SavePoint<'a>(pub &'a mut Assistant);
 
 impl Drop for SavePoint<'_> {
     fn drop(&mut self) {
@@ -47,7 +61,8 @@ impl Drop for SavePoint<'_> {
     }
 }
 
-impl Oracle {
+impl Assistant {
+    /// Create a new [`Assistant`] from a context and formatter.
     pub fn new<C: Context + Send + 'static, F: Formatter + Send + 'static>(
         context: C,
         formatter: F,
@@ -98,6 +113,7 @@ impl Oracle {
         self.generate(&Role::User, text, think, false, action, None)
     }
 
+    /// Append the BOS (beginning of sequence) token if this is a fresh context.
     pub fn bos(&mut self, s: &mut String) {
         if self.is_fresh_context {
             if let Some(bos) = self.formatter.bos() {
@@ -155,12 +171,17 @@ impl Oracle {
         Ok(())
     }
 
+    /// Append a turn with the given role and text to the context.
     pub fn prompt(&mut self, role: &Role, text: &str) -> Result<usize, InferenceError> {
         let mut fragment = String::new();
         self.prepare_prompt(role, text, &mut fragment)?;
         self.inference.prefill(&fragment)
     }
 
+    /// Generate a response for the given role and text.
+    ///
+    /// If `reset` is true, the context is rolled back after generation.
+    /// If `think` is true, reasoning tags are added for models that support them.
     pub fn generate(
         &mut self,
         role: &Role,
@@ -180,6 +201,7 @@ impl Oracle {
         self.generate_answer(answer, think, reset)
     }
 
+    /// Build the prompt fragment for generation without actually running inference.
     pub fn generate_fragment(
         &mut self,
         role: &Role,
@@ -214,6 +236,7 @@ impl Oracle {
         Ok(fragment)
     }
 
+    /// Post-process a generated answer, handling reasoning extraction and state management.
     pub fn generate_answer(
         &mut self,
         mut answer: Answer<String>,
@@ -233,41 +256,52 @@ impl Oracle {
         Ok(answer.split_thought(self.formatter.as_ref()))
     }
 
+    /// Clear the entire context, resetting to an empty state.
     pub fn clear(&mut self) -> Result<(), InferenceError> {
         self.is_fresh_context = true;
         self.active_turn = None;
         self.inference.clear()
     }
 
-    pub fn rollback(&mut self, state: &OracleState) -> Result<(), InferenceError> {
+    /// Roll back the context to a previously saved state.
+    pub fn rollback(&mut self, state: &State) -> Result<(), InferenceError> {
         self.inference.rollback(state.pos)?;
         self.active_turn = state.role.clone();
+        if let Some(p) = self.reset_point.as_ref() && p.pos > state.pos {
+            self.reset_point = None;
+        }
         Ok(())
     }
 
-    pub fn save(&mut self) -> Result<OracleState, InferenceError> {
-        Ok(OracleState::new(
+    /// Save the current state for potential rollback.
+    pub fn save(&mut self) -> Result<State, InferenceError> {
+        Ok(State::new(
             self.inference.pos(),
             self.active_turn.clone(),
         ))
     }
 
+    /// Return the total number of tokens in the context.
     pub fn tokens_n(&self) -> usize {
         self.inference.pos()
     }
 
+    /// Set the maximum number of tokens to generate per answer.
     pub fn set_max_answer_tokens(&mut self, max_answer_tokens: usize) {
         self.max_answer_tokens = max_answer_tokens;
     }
 
+    /// Return a reference to the vocabulary.
     pub fn vocab(&self) -> &BoxedVocab {
         self.inference.vocab()
     }
 
+    /// Return a reference to the formatter.
     pub fn formatter(&self) -> &dyn Formatter {
         self.formatter.as_ref()
     }
 
+    /// Generate a JSON array of type `T` using schema-based constrained generation.
     pub fn json_ask<T: DeserializeOwned + JsonSchema + 'static>(
         &mut self,
         think: bool,
@@ -296,6 +330,7 @@ impl Oracle {
         }
     }
 
+    /// Convenience wrapper for [`json_ask`] that returns the values directly.
     pub fn ask_values<T: DeserializeOwned + JsonSchema + 'static>(
         &mut self,
         think: bool,
@@ -308,6 +343,7 @@ impl Oracle {
             _ => Err(InferenceError::IncompleteAnswer),
         }
     }
+    /// Choose a single value from an enum using constrained generation.
     pub fn choose<T>(
         &mut self,
         think: bool,
@@ -341,6 +377,7 @@ impl Oracle {
         }
     }
 
+    /// Convenience wrapper for [`choose`] that returns the value directly.
     pub fn choose_value<T>(
         &mut self,
         think: bool,
